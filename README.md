@@ -113,14 +113,16 @@ Questions, suggestions, or just want to chat?
 
 ---
 
-## 📸 Preview
+## 🎬 Interactive Demo
 
 <p align="center">
-  <img src="https://pennote.app/screenshots/editor.png" alt="Pennote Editor" width="600" />
+  <a href="https://app.arcade.software/share/WiPZozrUfATlfgkN1jiP">
+    <img src="https://img.shields.io/badge/▶️%20Try%20Interactive%20Demo-Click%20Here-purple?style=for-the-badge" alt="Interactive Demo" />
+  </a>
 </p>
 
 <p align="center">
-  <img src="https://pennote.app/screenshots/quiz.png" alt="Pennote Quiz" width="600" />
+  👆 Click to explore Pennote in action!
 </p>
 
 ---
