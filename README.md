@@ -115,7 +115,15 @@ Questions, suggestions, or just want to chat?
 
 ## 🎬 Interactive Demo
 
-<!--ARCADE EMBED START--><div style="position: relative; padding-bottom: calc(70.9677% + 41px); height: 0px; width: 100%;"><iframe src="https://demo.arcade.software/WiPZozrUfATlfgkN1jiP?embed&embed_mobile=tab&embed_desktop=inline&show_copy_link=true" title="Pennote Demo" frameborder="0" loading="lazy" webkitallowfullscreen mozallowfullscreen allowfullscreen allow="clipboard-write" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; color-scheme: light;" ></iframe></div><!--ARCADE EMBED END-->
+<p align="center">
+  <a href="https://app.arcade.software/share/WiPZozrUfATlfgkN1jiP">
+    <img src="https://img.shields.io/badge/▶️%20Try%20Interactive%20Demo-Click%20Here-purple?style=for-the-badge" alt="Interactive Demo" />
+  </a>
+</p>
+
+<p align="center">
+  👆 Click to explore Pennote in action!
+</p>
 
 ---
 
