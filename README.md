@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://pennote.app/logo.png" alt="Pennote Logo" width="120" />
+  <img src="https://framerusercontent.com/images/0XIhOKeYa0NJs2CYS0Q8nv9qw.png" alt="Pennote Logo" width="120" />
 </p>
 
 <h1 align="center">Pennote</h1>
@@ -101,8 +101,8 @@ Travaille avec tes camarades sur les mêmes notes, en même temps.
 
 Tu as des questions, suggestions ou tu veux juste discuter ?
 
-- 🐦 [Twitter/X](https://twitter.com/pennoteapp)
-- 💬 [Discord](https://discord.gg/pennote)
+- 🐦 [Twitter/X](https://x.com/pennotefr)
+- 💬 [Discord](https://discord.gg/Jfb2NXYhEG)
 - 📧 contact@pennote.app
 
 ---
