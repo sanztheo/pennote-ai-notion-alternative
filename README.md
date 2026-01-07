@@ -1,0 +1,136 @@
+<p align="center">
+  <img src="https://pennote.app/logo.png" alt="Pennote Logo" width="120" />
+</p>
+
+<h1 align="center">Pennote</h1>
+
+<p align="center">
+  <strong>L'app de prise de notes intelligente propulsée par l'IA</strong>
+</p>
+
+<p align="center">
+  <a href="https://pennote.app">Site Web</a> •
+  <a href="https://pennote.app/login">Commencer gratuitement</a> •
+  <a href="#fonctionnalités">Fonctionnalités</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Status-Live-brightgreen" alt="Status" />
+  <img src="https://img.shields.io/badge/Prix-Gratuit-blue" alt="Prix" />
+  <img src="https://img.shields.io/badge/Made%20for-Students-orange" alt="Pour étudiants" />
+</p>
+
+---
+
+## 🎯 Pourquoi Pennote ?
+
+Tu passes des heures à prendre des notes... mais combien de temps à vraiment les **réviser** ?
+
+**Pennote transforme tes notes en machine à apprendre.**
+
+Contrairement à Notion ou Google Docs, Pennote est conçu spécifiquement pour les **étudiants** et les **apprenants**. Chaque fonctionnalité est pensée pour t'aider à **retenir** ce que tu écris, pas juste à le stocker.
+
+---
+
+## ✨ Fonctionnalités
+
+### 📝 Éditeur Puissant
+Un éditeur moderne et intuitif, inspiré de Notion. Blocs, slash commands, markdown, LaTeX, diagrammes Mermaid... Tout ce qu'il faut pour des notes claires et structurées.
+
+### 🤖 Assistant IA Intégré
+Pose des questions sur tes notes, demande des explications, génère des résumés. L'IA comprend **ton contenu** et t'aide à l'exploiter.
+
+### 📚 Quiz Intelligents
+**La killer feature.** Génère automatiquement des quiz à partir de tes notes :
+- QCM, Vrai/Faux, Questions ouvertes
+- Difficulté adaptative
+- Correction détaillée avec références à tes sources
+- Suivi de ta progression
+
+### 🔍 Recherche & Sources
+Connecte Wikipedia, tes PDFs, le web... L'IA recherche et synthétise les informations pour enrichir tes notes.
+
+### 📊 Dashboard de Progression
+Visualise tes statistiques d'apprentissage, tes points forts et faibles, ton streak de révision.
+
+### 👥 Collaboration Temps Réel
+Travaille avec tes camarades sur les mêmes notes, en même temps.
+
+---
+
+## 🎓 Parfait pour
+
+- **Étudiants** en médecine, droit, prépa, licence...
+- **Autodidactes** qui veulent structurer leur apprentissage
+- **Professionnels** en reconversion ou formation continue
+- **Lycéens** préparant le bac
+
+---
+
+## 💰 Tarifs
+
+| Gratuit | Premium |
+|---------|---------|
+| Notes illimitées | Tout le gratuit + |
+| Quiz basiques | Quiz illimités |
+| 1 workspace | Workspaces illimités |
+| Assistant IA (limité) | Assistant IA illimité |
+| | Sources avancées (PDF, Web) |
+| | Statistiques détaillées |
+
+**→ [Commencer gratuitement](https://pennote.app/login)**
+
+---
+
+## 🚀 Roadmap Publique
+
+- [x] Éditeur de notes avancé
+- [x] Génération de quiz par IA
+- [x] Assistant conversationnel
+- [x] Collaboration temps réel
+- [x] Import PDF
+- [ ] Application mobile (iOS/Android)
+- [ ] Mode hors-ligne
+- [ ] Flashcards avec répétition espacée
+- [ ] Partage public de notes
+- [ ] API pour développeurs
+
+---
+
+## 💬 Communauté
+
+Tu as des questions, suggestions ou tu veux juste discuter ?
+
+- 🐦 [Twitter/X](https://twitter.com/pennoteapp)
+- 💬 [Discord](https://discord.gg/pennote)
+- 📧 contact@pennote.app
+
+---
+
+## 📸 Aperçu
+
+<p align="center">
+  <img src="https://pennote.app/screenshots/editor.png" alt="Éditeur Pennote" width="600" />
+</p>
+
+<p align="center">
+  <img src="https://pennote.app/screenshots/quiz.png" alt="Quiz Pennote" width="600" />
+</p>
+
+---
+
+<p align="center">
+  <strong>Arrête de juste prendre des notes. Commence à apprendre.</strong>
+</p>
+
+<p align="center">
+  <a href="https://pennote.app/login">
+    <img src="https://img.shields.io/badge/Essayer%20Pennote-Gratuit-brightgreen?style=for-the-badge" alt="Essayer Pennote" />
+  </a>
+</p>
+
+---
+
+<p align="center">
+  Made with ❤️ in France
+</p>
