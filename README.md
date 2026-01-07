@@ -109,7 +109,7 @@ Questions, suggestions, or just want to chat?
 
 - 🐦 [Twitter/X](https://x.com/pennotefr)
 - 💬 [Discord](https://discord.gg/Jfb2NXYhEG)
-- 📧 contact@pennote.app
+- 📧 sanztheopro@gmail.com
 
 ---
 
