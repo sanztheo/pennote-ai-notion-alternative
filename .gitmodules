@@ -1,0 +1,9 @@
+[submodule "pen-backend"]
+	path = pen-backend
+	url = https://github.com/sanztheo/pen-backend.git
+[submodule "pen-frontend"]
+	path = pen-frontend
+	url = https://github.com/sanztheo/pen-frontend.git
+[submodule "pen-website"]
+	path = pen-website
+	url = https://github.com/sanztheo/pen-website.git
