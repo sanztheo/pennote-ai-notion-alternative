@@ -1,0 +1,27 @@
+# Documentation
+docs/
+
+# Marketing assets
+marketing/
+
+# Agent workflow files
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+REVIEW.md
+.agent-rules.md
+orchestrator.sh
+warp_setup.md
+
+# Cleanup/status files
+CLEANUP-DEAD-CODE.md
+TRANSLATION_STATUS.md
+
+# IDE/Editor
+.vscode/
+
+# Git
+.gitmodules
+
+# OS
+.DS_Store
