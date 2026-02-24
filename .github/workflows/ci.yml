@@ -100,6 +100,7 @@ jobs:
         run: npm run build
         working-directory: ${{ matrix.project }}
         env:
+          NODE_OPTIONS: --max-old-space-size=4096
           VITE_API_URL: https://placeholder.api.com
           VITE_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
           VITE_PADDLE_CLIENT_TOKEN: test_placeholder
@@ -128,6 +129,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        working-directory: pen-backend
+
+      - name: Generate Prisma clients
+        run: npx prisma generate && npx prisma generate --schema=prisma/schema-embeddings.prisma
         working-directory: pen-backend
 
       - name: Run Jest tests
