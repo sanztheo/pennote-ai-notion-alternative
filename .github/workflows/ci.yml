@@ -132,11 +132,7 @@ jobs:
 
       - name: Run Jest tests
         # TODO: Remove testPathIgnorePatterns once preprocessor tests are fixed
-        run: >-
-          npm test -- --ci
-          --testPathIgnorePatterns="node_modules"
-          --testPathIgnorePatterns="dist"
-          --testPathIgnorePatterns="preprocessor/__tests__/(QuizPreprocessorAgent|limitValidator|integrationHelper)"
+        run: npm test -- --ci --testPathIgnorePatterns="node_modules" --testPathIgnorePatterns="dist" --testPathIgnorePatterns="preprocessor/__tests__/(QuizPreprocessorAgent|limitValidator|integrationHelper)"
         working-directory: pen-backend
         env:
           NODE_OPTIONS: --experimental-vm-modules
