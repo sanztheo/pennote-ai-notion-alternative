@@ -1,6 +1,6 @@
 # Beta Management — Roadmap d'Implémentation
 
-> **Status:** En cours (Phase 3 + Tests terminés) | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-02-07
+> **Status:** En cours (Phases 1-5 + Tests unitaires terminés) | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-02-20
 
 ---
 
@@ -69,35 +69,41 @@
 
 ---
 
-## Phase 4 : Site Vitrine (`pen-website`)
+## Phase 4 : Site Vitrine (`pen-website`) ✅ (2026-02-20 — vérifié code existant)
 
-- [ ] Hook `useBetaStatus` (PEN-119)
-- [ ] Composant `SpotsCounter` (PEN-120)
-- [ ] Page `/join` avec logique conditionnelle (PEN-121)
-- [ ] Formulaire `WaitlistForm` (PEN-122)
-- [ ] Composant `ReactivateButton` (PEN-123)
-- [ ] Boutons conditionnels navbar — Réactiver / Waitlist (PEN-143)
+- [x] Hook `useBetaStatus` (PEN-119)
+- [x] Composant `SpotsCounter` (PEN-120)
+- [x] Page `/join` avec logique conditionnelle (PEN-121)
+- [x] Formulaire `WaitlistForm` (PEN-122)
+- [x] Composant `ReactivateButton` (PEN-123)
+- [x] Boutons conditionnels navbar — Réactiver / Waitlist (PEN-143)
+- [x] `BetaStatusContext` + `JoinPageContent` (résolution dynamique 6 états)
+- [x] Kill switch `BETA_LIVE` : si false → Web3Forms waitlist form
 
 **Fichiers :**
 - `pen-website/src/hooks/useBetaStatus.ts`
-- `pen-website/src/components/beta/`
+- `pen-website/src/components/beta/` (SpotsCounter, WaitlistForm, ReactivateButton)
+- `pen-website/src/components/join/JoinPageContent.tsx`
+- `pen-website/src/contexts/BetaStatusContext.tsx`
 - `pen-website/src/app/[locale]/join/page.tsx`
-- `pen-website/src/components/navbar/`
+- `pen-website/src/components/layout/navbar.tsx` (getBetaCta)
 
 ---
 
-## Phase 5 : Application (`pen-frontend`)
+## Phase 5 : Application (`pen-frontend`) ✅ (2026-02-20 — vérifié code existant)
 
-- [ ] Composant `BetaProgressBanner` (visible/minimized/closed)
-- [ ] Service `HeartbeatService` (ping 30s)
-- [ ] Hook `useBetaProgress` (données onboarding checklist)
-- [ ] Intégration dans Layout principal
+- [x] Composant `BetaProgressBanner` (visible/minimized/closed)
+- [x] Service `BetaHeartbeatService` (singleton, ping 30s fire-and-forget)
+- [x] Hook `useBetaHeartbeat` (start/stop basé sur auth + beta status)
+- [x] Hook `useBetaStatus` (stale-while-revalidate, 5min cache TTL)
+- [x] Intégration dans Layout principal (banner + heartbeat)
 
 **Fichiers :**
 - `pen-frontend/src/components/beta/BetaProgressBanner.tsx`
-- `pen-frontend/src/services/heartbeat.ts`
-- `pen-frontend/src/hooks/useBetaProgress.ts`
-- `pen-frontend/src/layouts/AppLayout.tsx`
+- `pen-frontend/src/services/betaHeartbeat.ts`
+- `pen-frontend/src/hooks/useBetaHeartbeat.ts`
+- `pen-frontend/src/hooks/useBetaStatus.ts`
+- `pen-frontend/src/components/layout/Layout.tsx` (import + render)
 
 ---
 
