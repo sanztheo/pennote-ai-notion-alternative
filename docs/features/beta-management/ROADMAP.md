@@ -1,6 +1,6 @@
 # Beta Management — Roadmap d'Implémentation
 
-> **Status:** En cours (Phases 1-5 + Tests unitaires terminés) | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-02-20
+> **Status:** En cours | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-02-26 (audit code réel)
 
 ---
 
@@ -61,6 +61,8 @@
 - [x] Stagger des schedules (évite thundering herd + respect de l'ordre logique)
 - [x] 28 tests enterprise-grade (BetaCronService)
 
+**⚠️ Note :** `cleanupExpiredAccounts` marque seulement le statut `expired` et supprime l'entrée waitlist. Il ne supprime **PAS** le compte Clerk ni les données utilisateur (voir Phase 8).
+
 **Fichiers :**
 - `pen-backend/src/services/BetaCronService.ts`
 - `pen-backend/src/jobs/cronJobs.ts`
@@ -90,13 +92,19 @@
 
 ---
 
-## Phase 5 : Application (`pen-frontend`) ✅ (2026-02-20 — vérifié code existant)
+## Phase 5 : Application (`pen-frontend`) ⚠️ PARTIEL
 
-- [x] Composant `BetaProgressBanner` (visible/minimized/closed)
+Ce qui est fait :
 - [x] Service `BetaHeartbeatService` (singleton, ping 30s fire-and-forget)
 - [x] Hook `useBetaHeartbeat` (start/stop basé sur auth + beta status)
 - [x] Hook `useBetaStatus` (stale-while-revalidate, 5min cache TTL)
 - [x] Intégration dans Layout principal (banner + heartbeat)
+- [x] `BetaProgressBanner` — états visible/minimized/closed avec localStorage
+
+Ce qui manque :
+- [ ] **Onboarding 4 étapes dans BetaProgressBanner** — le composant actuel affiche seulement "Vous êtes dans la bêta" + compteur de places. Les 4 steps (créer page, écrire contenu, ask AI, générer quiz) ne sont **PAS implémentés** (PEN-124 à rouvrir)
+- [ ] **Hook `useBetaProgress`** — n'existe pas du tout, `useBetaStatus` ne retourne que le statut, pas la progression onboarding (PEN-126 à rouvrir)
+- [x] **Visibility change listener** sur heartbeat — pause/resume via `visibilitychange` (PEN-147 ✅)
 
 **Fichiers :**
 - `pen-frontend/src/components/beta/BetaProgressBanner.tsx`
@@ -119,7 +127,7 @@
 
 ---
 
-## Phase 7 : Tests & Validation ✅ (2026-02-07) — Tests unitaires terminés
+## Phase 7 : Tests & Validation — Tests unitaires terminés (2026-02-07)
 
 - [x] Tests unitaires BetaService — 24 tests (PEN-130 ✅)
 - [x] Tests sécurité WaitlistController — 25 tests (fait lors du hardening Phase 2b, hors scope PEN-131)
@@ -127,6 +135,31 @@
 - **Total : 77 tests, 0 échecs**
 - [ ] Tests integration API endpoints — supertest (PEN-131)
 - [ ] Test E2E flow complet (PEN-133)
+
+---
+
+## Phase 8 : Suppression définitive de compte ❌ NON IMPLÉMENTÉ
+
+Décrit dans DOC.md mais jamais codé :
+- [ ] Fonction `deleteUserCompletely` (Clerk + DB cascade + audit log)
+- [ ] Intégration dans `cleanupExpiredAccounts` (actuellement marque seulement `expired`)
+- [ ] Self-delete : endpoint pour que l'utilisateur supprime son propre compte
+- [ ] Conformité GDPR : export de données + droit à la suppression
+
+**Impact :** Les comptes "expired" restent en base indéfiniment. Pas de suppression Clerk.
+
+---
+
+## Phase 9 : Admin Dashboard Beta ❌ NON IMPLÉMENTÉ
+
+Aucun endpoint ni UI admin spécifique beta n'existe :
+- [ ] `GET /api/admin/beta/users` — liste des users beta avec statut/activité
+- [ ] `GET /api/admin/beta/metrics` — métriques (spots utilisés, promotions, kicks)
+- [ ] `POST /api/admin/beta/users/:userId/kick` — kick manuel d'un user beta
+- [ ] `POST /api/admin/beta/users/:userId/promote` — promotion manuelle depuis waitlist
+- [ ] UI admin pour visualiser et gérer les beta testers
+
+**Note :** L'admin actuel peut ban/unban un user (`toggle-status`) mais ne peut pas gérer le statut beta spécifiquement.
 
 ---
 
@@ -139,24 +172,26 @@ Phase 2 (API) ──► Phase 3 (Jobs)
     ↓                  ↓
 Phase 4 (Website)  Phase 6 (Emails)
     ↓
-Phase 5 (App)
-    ↓
-Phase 7 (Tests)
+Phase 5 (App) ──► Phase 8 (Suppression)
+    ↓                     ↑
+Phase 7 (Tests)    Phase 9 (Admin)
 ```
 
 ---
 
-## Estimation
+## Résumé du statut actuel (2026-02-26)
 
-| Phase | Complexité | Estimation |
-|-------|------------|------------|
-| 1. DB | Simple | — |
-| 2. API | Moyenne | — |
-| 3. Jobs | Moyenne | — |
-| 4. Website | Simple | — |
-| 5. App | Moyenne | — |
-| 6. Emails | Simple | — |
-| 7. Tests | Moyenne | — |
+| Phase | Statut | Bloquant pour le launch ? |
+|-------|--------|--------------------------|
+| 1. DB | ✅ Complet | — |
+| 2. API + Hardening | ✅ Complet | — |
+| 3. Cron Jobs | ✅ Complet | — |
+| 4. Website | ✅ Complet | — |
+| 5. App (frontend) | ⚠️ Partiel | Oui — onboarding manquant |
+| 6. Emails | ❌ Non commencé | Optionnel au launch (pas d'email de kick) |
+| 7. Tests | ⚠️ Unitaires OK, integ/E2E manquants | Optionnel au launch |
+| 8. Suppression | ❌ Non commencé | Oui — GDPR + comptes zombies |
+| 9. Admin | ❌ Non commencé | Oui — impossible de gérer la beta |
 
 ---
 
@@ -166,3 +201,4 @@ Phase 7 (Tests)
 - **Heartbeat** : Ne pas bloquer si erreur (fire & forget)
 - **FIFO strict** : Trier par `joinedAt` ASC pour la waitlist
 - **Pas d'email de kick** : L'utilisateur découvre en revenant sur le site
+- **`BETA_LIVE = false`** : Kill switch actif — tous les endpoints retournent 503, cron jobs désactivés
