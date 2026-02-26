@@ -194,7 +194,6 @@ jobs:
     name: "E2E Tests (Playwright)"
     needs: build
     runs-on: ubuntu-latest
-    continue-on-error: true  # Non-blocking: requires staging env (infisical) not available in CI yet
     steps:
       - name: Checkout with submodules
         uses: actions/checkout@v4
@@ -222,6 +221,8 @@ jobs:
         working-directory: pen-frontend
         env:
           CI: true
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
 
       - name: Upload Playwright report
         if: failure()
@@ -301,11 +302,11 @@ jobs:
           echo "E2E Tests: $E2E"
           echo "Security: $SECURITY"
 
-          # E2E excluded: requires staging env (infisical) not available in CI yet
           if [[ "$QUALITY_GATE" == "failure" ]] || \
              [[ "$BUILD" == "failure" ]] || \
              [[ "$TESTS_BACKEND" == "failure" ]] || \
-             [[ "$TESTS_FRONTEND" == "failure" ]]; then
+             [[ "$TESTS_FRONTEND" == "failure" ]] || \
+             [[ "$E2E" == "failure" ]]; then
             echo ""
             echo "CI Pipeline FAILED"
             exit 1
