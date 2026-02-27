@@ -2,9 +2,9 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [main, sandbox]
   pull_request:
-    branches: [main]
+    branches: [main, sandbox]
   workflow_dispatch:
 
 concurrency:
@@ -193,6 +193,7 @@ jobs:
   e2e-tests:
     name: "E2E Tests (Playwright)"
     needs: build
+    if: github.base_ref == 'main' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout with submodules
