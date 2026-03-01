@@ -40,6 +40,28 @@ jobs:
         run: npm ci
         working-directory: ${{ matrix.project }}
 
+      - name: Validate Prisma schemas (backend only)
+        if: matrix.project == 'pen-backend'
+        run: |
+          npx prisma validate
+          npx prisma validate --schema=prisma/schema-embeddings.prisma
+        working-directory: ${{ matrix.project }}
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          EMBEDDING_DATABASE_URL: postgresql://test:test@localhost:5432/test_embeddings
+
+      - name: Check Prisma schema formatting (backend only)
+        if: matrix.project == 'pen-backend'
+        run: |
+          npx prisma format --schema=prisma/schema.prisma
+          npx prisma format --schema=prisma/schema-embeddings.prisma
+          if [ -n "$(git diff --name-only)" ]; then
+            echo "::error::Prisma schema is not formatted. Run 'npx prisma format' locally and commit."
+            git diff --name-only
+            exit 1
+          fi
+        working-directory: ${{ matrix.project }}
+
       - name: Generate Prisma clients (backend only)
         if: matrix.project == 'pen-backend'
         run: npx prisma generate && npx prisma generate --schema=prisma/schema-embeddings.prisma
