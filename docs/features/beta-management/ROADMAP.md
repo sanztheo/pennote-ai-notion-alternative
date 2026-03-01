@@ -153,15 +153,29 @@
 
 ---
 
-## Phase 8 : Suppression définitive de compte ❌ NON IMPLÉMENTÉ
+## Phase 8 : Suppression définitive de compte ✅ (2026-03-01)
 
-Décrit dans DOC.md mais jamais codé :
-- [ ] Fonction `deleteUserCompletely` (Clerk + DB cascade + audit log)
-- [ ] Intégration dans `cleanupExpiredAccounts` (actuellement marque seulement `expired`)
-- [ ] Self-delete : endpoint pour que l'utilisateur supprime son propre compte
-- [ ] Conformité GDPR : export de données + droit à la suppression
+- [x] `AccountDeletionService.deleteUserCompletely` — Clerk + DB transaction + audit log + P2034 retry
+- [x] `AccountDeletionService.exportUserData` — Export GDPR (profile, pages, quizzes, conversations, activity, subscription)
+- [x] Intégration dans `cleanupExpiredAccounts` — feature flag `ENABLE_ACCOUNT_DELETION` + dynamic import
+- [x] `DELETE /api/beta/account` — Self-delete avec guard impersonation
+- [x] `GET /api/beta/account/export` — Export données personnelles
+- [x] Rate limiters : 1 delete/heure, 1 export/jour
+- [x] Shared workspace handling : pages/projects reassignés au workspace owner, invitedBy nullifié
+- [x] 27 tests enterprise-grade (AccountDeletionService)
 
-**Impact :** Les comptes "expired" restent en base indéfiniment. Pas de suppression Clerk.
+**Fichiers créés :**
+- `pen-backend/src/services/AccountDeletionService.ts`
+- `pen-backend/src/services/AccountDeletionService.types.ts`
+- `pen-backend/src/controllers/beta/deleteAccountController.ts`
+- `pen-backend/src/controllers/beta/exportAccountController.ts`
+- `pen-backend/src/services/__tests__/AccountDeletionService.test.ts` (27 tests)
+
+**Fichiers modifiés :**
+- `pen-backend/src/services/BetaCronService.ts` (deleteExpiredUsers + feature flag)
+- `pen-backend/src/routes/beta.ts` (DELETE /account + GET /account/export)
+- `pen-backend/src/controllers/beta/index.ts` (exports)
+- `pen-backend/src/middlewares/rateLimiting.ts` (accountDeleteRateLimit + accountExportRateLimit)
 
 ---
 
@@ -224,7 +238,7 @@ Phase 7 (Tests)    Phase 9 (Admin)
 | 5. App (frontend) | ✅ Complet | — |
 | 6. Emails | ❌ Non commencé | Optionnel au launch (pas d'email de kick) |
 | 7. Tests | ✅ Complet (141 tests) | — |
-| 8. Suppression | ❌ Non commencé | Oui — GDPR + comptes zombies |
+| 8. Suppression | ✅ Complet (27 tests) | — |
 | 9. Admin | ✅ Complet | — |
 
 ---
