@@ -1,6 +1,6 @@
 # Beta Management — Roadmap d'Implémentation
 
-> **Status:** En cours | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-03-01
+> **Status:** Complet (hors Phase 6 Emails) | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-03-01
 
 ---
 
@@ -139,7 +139,8 @@
 - [x] Tests intégration API admin beta — 20 tests supertest (PEN-131 ✅)
 - [x] Tests E2E beta flow — 10 tests Playwright (PEN-133 ✅)
 - [x] Tests E2E beta admin — 10 tests Playwright (PEN-133 ✅)
-- **Total : 141 tests beta, 0 échecs**
+- **Total Phase 7 : 141 tests beta, 0 échecs**
+- **Grand total (avec Phase 8) : 190 tests beta, 0 échecs**
 
 **Fichiers tests :**
 - `pen-backend/src/services/__tests__/BetaService.test.ts` (22 tests)
@@ -162,20 +163,28 @@
 - [x] `GET /api/beta/account/export` — Export données personnelles
 - [x] Rate limiters : 1 delete/heure, 1 export/jour
 - [x] Shared workspace handling : pages/projects reassignés au workspace owner, invitedBy nullifié
-- [x] 27 tests enterprise-grade (AccountDeletionService)
+- [x] 49 tests enterprise-grade (AccountDeletionService)
+
+### Audit qualité & scalabilité (2026-03-01)
+
+- [x] **DB indexes** : `@@index([createdBy])` sur Page et Project, `@@index([userId])` sur ActivityLog — accélère les queries de transfert et suppression
+- [x] **Export pagination** : `take: EXPORT_MAX_ITEMS` (1000) + `orderBy: { createdAt: "desc" }` sur conversations et activity logs — prévient OOM sur gros comptes
+- [x] **Distributed Redis lock** : SETNX + TTL 300s sur `cleanupExpiredAccounts` — empêche double exécution en multi-instance
+- [x] **Test seam Clerk** : `_setClerkForTest()` — mock ESM-compatible (ts-jest + `useESM: true` casse `jest.mock()` pour packages tiers)
 
 **Fichiers créés :**
 - `pen-backend/src/services/AccountDeletionService.ts`
 - `pen-backend/src/services/AccountDeletionService.types.ts`
 - `pen-backend/src/controllers/beta/deleteAccountController.ts`
 - `pen-backend/src/controllers/beta/exportAccountController.ts`
-- `pen-backend/src/services/__tests__/AccountDeletionService.test.ts` (27 tests)
+- `pen-backend/src/services/__tests__/AccountDeletionService.test.ts` (49 tests)
 
 **Fichiers modifiés :**
-- `pen-backend/src/services/BetaCronService.ts` (deleteExpiredUsers + feature flag)
+- `pen-backend/src/services/BetaCronService.ts` (deleteExpiredUsers + feature flag + distributed lock)
 - `pen-backend/src/routes/beta.ts` (DELETE /account + GET /account/export)
 - `pen-backend/src/controllers/beta/index.ts` (exports)
 - `pen-backend/src/middlewares/rateLimiting.ts` (accountDeleteRateLimit + accountExportRateLimit)
+- `pen-backend/prisma/schema.prisma` (3 indexes pour cascade queries)
 
 ---
 
@@ -238,7 +247,7 @@ Phase 7 (Tests)    Phase 9 (Admin)
 | 5. App (frontend) | ✅ Complet | — |
 | 6. Emails | ❌ Non commencé | Optionnel au launch (pas d'email de kick) |
 | 7. Tests | ✅ Complet (141 tests) | — |
-| 8. Suppression | ✅ Complet (27 tests) | — |
+| 8. Suppression | ✅ Complet (49 tests) | — |
 | 9. Admin | ✅ Complet | — |
 
 ---

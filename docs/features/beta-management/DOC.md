@@ -31,6 +31,7 @@ enum BetaStatus {
   inactive                // Désactivé, peut réactiver ou waitlist
   waitlist                // Sur waitlist, attend une place
   pending_reactivation    // A reçu l'email, 7 jours pour réagir
+  expired                 // Deadline dépassée, en attente de suppression
 }
 ```
 
@@ -127,6 +128,26 @@ Réactivation d'un compte désactivé.
 - Si non: 403 "No spots available"
 ```
 
+#### `DELETE /api/beta/account`
+
+Suppression définitive du compte (self-delete).
+
+```typescript
+// Auth: required | Rate limit: 1/heure
+// Guard: 403 si req.impersonatedBy (admin ne peut pas supprimer via impersonation)
+// Action: AccountDeletionService.deleteUserCompletely(userId)
+```
+
+#### `GET /api/beta/account/export`
+
+Export GDPR des données personnelles.
+
+```typescript
+// Auth: required | Rate limit: 1/jour
+// Response: { success: true, data: UserExportData }
+// Inclut: profil, workspaces, pages, quizzes, conversations AI, activity, subscription
+```
+
 ---
 
 ## 4. Cron Jobs (BullMQ)
@@ -162,10 +183,11 @@ Réactivation d'un compte désactivé.
 ### `cleanupExpiredAccounts` — Toutes les heures
 
 ```typescript
-// Trouve users avec :
-// - betaStatus = "pending_reactivation"
-// - betaReactivationDeadline < now
-// Action : suppression définitive (Clerk + DB)
+// Distributed lock: Redis SETNX (TTL 300s) — empêche double exécution
+// 1. Marque expired : betaStatus "inactive" + deadline dépassée → "expired"
+// 2. Si ENABLE_ACCOUNT_DELETION=true :
+//    → AccountDeletionService.deleteUserCompletely() pour chaque expired
+//    → try/catch par user (continue on failure)
 ```
 
 ---
@@ -270,23 +292,58 @@ L'équipe Pennote
 
 ---
 
-## 8. Suppression Définitive
+## 8. Suppression Définitive & Export GDPR
+
+### `DELETE /api/beta/account` — Self-delete
+
+Suppression complète du compte utilisateur. Guard impersonation (403 si admin impersonate).
 
 ```typescript
-async function deleteUserCompletely(userId: string) {
-  // 1. Clerk
-  await clerkClient.users.deleteUser(userId)
+// Auth: required | Rate limit: 1/heure
+// Ordre: Clerk AVANT DB (si DB échoue, user ne peut plus se connecter mais données intactes pour cleanup)
 
-  // 2. DB (cascade: pages, workspaces, quizzes, etc.)
-  await prisma.user.delete({ where: { id: userId } })
-
-  // 3. Waitlist cleanup
-  await prisma.betaWaitlist.deleteMany({ where: { userId } })
-
-  // 4. Audit log
-  logger.info(`[BETA] User ${userId} permanently deleted`)
-}
+AccountDeletionService.deleteUserCompletely(userId):
+  1. Vérifier user existe (findUnique)
+  2. Logger audit AVANT suppression
+  3. Supprimer Clerk user (tolérer 404, throw sinon)
+  4. Transaction Prisma Serializable + retry P2034 (3 tentatives, backoff expo 50ms):
+     - activityLog.deleteMany({ userId })
+     - Pages en workspaces partagés → update createdBy vers workspace owner
+     - Projets en workspaces partagés → update createdBy vers workspace owner
+     - workspaceMember.updateMany({ invitedBy: userId → null })
+     - user.delete (cascade: BetaWaitlist, Workspace, WorkspaceMember, etc.)
+  5. Invalider cache Redis (beta:active_count, admin:beta:metrics:*)
 ```
+
+### `GET /api/beta/account/export` — Export GDPR
+
+```typescript
+// Auth: required | Rate limit: 1/jour
+// Queries en parallèle (Promise.all)
+
+AccountDeletionService.exportUserData(userId):
+  - Profil (email, betaStatus, dates)
+  - Workspaces (owned + membre)
+  - Pages créées (paginé: 1000 max, desc)
+  - Quizzes générés
+  - Conversations AI (paginé: 1000 max, desc)
+  - Activity logs (paginé: 1000 max, desc)
+  - Subscription active
+```
+
+### Intégration cron
+
+`cleanupExpiredAccounts` supprime automatiquement les comptes `expired` si `ENABLE_ACCOUNT_DELETION=true` (Infisical, défaut: false). Distributed Redis lock SETNX (TTL 300s) pour éviter double exécution en multi-instance.
+
+### Cascade et données partagées
+
+| Relation | Problème | Solution |
+|----------|----------|----------|
+| `Page.createdBy` | required, pas de cascade | Transférer au workspace owner |
+| `Project.createdBy` | required, pas de cascade | Transférer au workspace owner |
+| `WorkspaceMember.invitedBy` | optional, pas de cascade | SET NULL |
+| `ActivityLog.userId` | required, pas de cascade | DELETE avant user |
+| Workspace, BetaWaitlist, etc. | onDelete: Cascade | Auto-nettoyé par Prisma |
 
 ---
 

@@ -1,6 +1,6 @@
 # Beta Management System
 
-> **Status:** Design validé | **Date:** 2026-02-05
+> **Status:** Production-ready (8/9 phases, 190 tests) | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-03-01
 
 ---
 
@@ -72,5 +72,8 @@ L'utilisateur doit satisfaire **3 critères sur 4** en 7 jours :
 | Auth | Clerk |
 | DB | Prisma + PostgreSQL |
 | Jobs | BullMQ + Redis |
-| Emails | À définir |
+| Emails | À définir (Phase 6) |
 | Tracking temps | Heartbeat 30s custom |
+| Suppression compte | Clerk + Prisma transaction Serializable |
+| Export GDPR | JSON direct (profil, pages, quizzes, AI, activity) |
+| Secrets | Infisical (`ENABLE_ACCOUNT_DELETION`) |
