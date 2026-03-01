@@ -1,6 +1,6 @@
 # Beta Management — Roadmap d'Implémentation
 
-> **Status:** En cours | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-02-26 (audit code réel)
+> **Status:** En cours | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-02-28
 
 ---
 
@@ -92,22 +92,24 @@
 
 ---
 
-## Phase 5 : Application (`pen-frontend`) ⚠️ PARTIEL
+## Phase 5 : Application (`pen-frontend`) ✅ (2026-02-27)
 
-Ce qui est fait :
 - [x] Service `BetaHeartbeatService` (singleton, ping 30s fire-and-forget)
 - [x] Hook `useBetaHeartbeat` (start/stop basé sur auth + beta status)
 - [x] Hook `useBetaStatus` (stale-while-revalidate, 5min cache TTL)
-- [x] Intégration dans Layout principal (banner + heartbeat)
-- [x] `BetaProgressBanner` — états visible/minimized/closed avec localStorage
-
-Ce qui manque :
-- [ ] **Onboarding 4 étapes dans BetaProgressBanner** — le composant actuel affiche seulement "Vous êtes dans la bêta" + compteur de places. Les 4 steps (créer page, écrire contenu, ask AI, générer quiz) ne sont **PAS implémentés** (PEN-124 à rouvrir)
-- [ ] **Hook `useBetaProgress`** — n'existe pas du tout, `useBetaStatus` ne retourne que le statut, pas la progression onboarding (PEN-126 à rouvrir)
+- [x] Intégration dans Layout principal (`BetaStatusProvider` + `BetaFloatingWidget` + heartbeat)
+- [x] `BetaFloatingWidget` — FAB bottom-right avec popover animé (framer-motion) (PEN-124 ✅)
+- [x] **Onboarding 4 étapes** : create_page, write_content, use_ai, generate_quiz — avec progress bar, checkmarks animés, confetti (canvas-confetti) sur complétion
+- [x] **Hook `useBetaProgress`** — consomme `BetaStatusContext`, retourne steps/completedCount/totalSteps/isAllComplete (PEN-126 ✅)
+- [x] `BetaConfetti` — particles depuis position du FAB (100 celebration / 50 step)
 - [x] **Visibility change listener** sur heartbeat — pause/resume via `visibilitychange` (PEN-147 ✅)
+- [x] Auto-dismiss après 5s quand 4/4, localStorage persistence par userId
 
 **Fichiers :**
-- `pen-frontend/src/components/beta/BetaProgressBanner.tsx`
+- `pen-frontend/src/components/beta/BetaFloatingWidget.tsx` (312 lignes)
+- `pen-frontend/src/components/beta/BetaConfetti.tsx`
+- `pen-frontend/src/components/beta/BetaStatusContext.tsx`
+- `pen-frontend/src/hooks/useBetaProgress.ts`
 - `pen-frontend/src/services/betaHeartbeat.ts`
 - `pen-frontend/src/hooks/useBetaHeartbeat.ts`
 - `pen-frontend/src/hooks/useBetaStatus.ts`
@@ -150,16 +152,35 @@ Décrit dans DOC.md mais jamais codé :
 
 ---
 
-## Phase 9 : Admin Dashboard Beta ❌ NON IMPLÉMENTÉ
+## Phase 9 : Admin Dashboard Beta ✅ (2026-02-27)
 
-Aucun endpoint ni UI admin spécifique beta n'existe :
-- [ ] `GET /api/admin/beta/users` — liste des users beta avec statut/activité
-- [ ] `GET /api/admin/beta/metrics` — métriques (spots utilisés, promotions, kicks)
-- [ ] `POST /api/admin/beta/users/:userId/kick` — kick manuel d'un user beta
-- [ ] `POST /api/admin/beta/users/:userId/promote` — promotion manuelle depuis waitlist
-- [ ] UI admin pour visualiser et gérer les beta testers
+- [x] `GET /api/admin/beta/metrics` — Métriques (spots, waitlist, actifs, inactifs, expirés) + trend 7j/30j (PEN-146 ✅)
+- [x] `GET /api/admin/beta/users` — Liste paginée, recherche, filtre status, tri
+- [x] `POST /api/admin/beta/users/:userId/kick` — Kick atomique → inactive + deadline 14j
+- [x] `POST /api/admin/beta/users/:userId/promote` — Promotion Serializable + retry P2034
+- [x] `POST /api/admin/beta/bulk` — Actions groupées (max 50, Zod validé)
+- [x] UI admin : onglet "Beta" dans le dashboard avec métriques, trend chart, table users, bulk actions
+- [x] 23 tests backend (betaAdminService.test.ts)
 
-**Note :** L'admin actuel peut ban/unban un user (`toggle-status`) mais ne peut pas gérer le statut beta spécifiquement.
+**Fichiers :**
+- `pen-backend/src/services/admin/betaAdminService.ts` (432 lignes)
+- `pen-backend/src/services/admin/__tests__/betaAdminService.test.ts` (23 tests)
+- `pen-backend/src/controllers/adminController.ts` (5 méthodes ajoutées)
+- `pen-backend/src/routes/admin.ts` (5 routes /beta/)
+- `pen-frontend/src/pages/Admin/components/BetaManagementPanel.tsx`
+- `pen-frontend/src/pages/Admin/components/BetaMetricsCards.tsx`
+- `pen-frontend/src/pages/Admin/components/BetaTrendChart.tsx`
+- `pen-frontend/src/pages/Admin/components/BetaUsersTable.tsx`
+
+**Sécurité :**
+| Risque | Mitigation |
+|--------|------------|
+| Unauthorized access | `authenticateToken + requireAdmin + adminRateLimit` |
+| Race conditions (promote) | Transaction Serializable + retry P2034 (3 tentatives) |
+| Bulk abuse | Zod validation max 50 userIds |
+| Self-kick | Guard `userId === req.user?.id` |
+
+**Cache :** Redis `admin:beta:metrics:{period}`, TTL 180s. Invalidé après kick/promote/bulk.
 
 ---
 
@@ -179,7 +200,7 @@ Phase 7 (Tests)    Phase 9 (Admin)
 
 ---
 
-## Résumé du statut actuel (2026-02-26)
+## Résumé du statut actuel (2026-02-28)
 
 | Phase | Statut | Bloquant pour le launch ? |
 |-------|--------|--------------------------|
@@ -187,11 +208,11 @@ Phase 7 (Tests)    Phase 9 (Admin)
 | 2. API + Hardening | ✅ Complet | — |
 | 3. Cron Jobs | ✅ Complet | — |
 | 4. Website | ✅ Complet | — |
-| 5. App (frontend) | ⚠️ Partiel | Oui — onboarding manquant |
+| 5. App (frontend) | ✅ Complet | — |
 | 6. Emails | ❌ Non commencé | Optionnel au launch (pas d'email de kick) |
 | 7. Tests | ⚠️ Unitaires OK, integ/E2E manquants | Optionnel au launch |
 | 8. Suppression | ❌ Non commencé | Oui — GDPR + comptes zombies |
-| 9. Admin | ❌ Non commencé | Oui — impossible de gérer la beta |
+| 9. Admin | ✅ Complet | — |
 
 ---
 
