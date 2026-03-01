@@ -1,6 +1,6 @@
 # Beta Management — Roadmap d'Implémentation
 
-> **Status:** En cours | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-02-28
+> **Status:** En cours | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-03-01
 
 ---
 
@@ -129,14 +129,27 @@
 
 ---
 
-## Phase 7 : Tests & Validation — Tests unitaires terminés (2026-02-07)
+## Phase 7 : Tests & Validation ✅ (2026-03-01)
 
-- [x] Tests unitaires BetaService — 24 tests (PEN-130 ✅)
-- [x] Tests sécurité WaitlistController — 25 tests (fait lors du hardening Phase 2b, hors scope PEN-131)
+- [x] Tests unitaires BetaService — 22 tests (PEN-130 ✅)
+- [x] Tests sécurité WaitlistController — 25 tests (fait lors du hardening Phase 2b)
 - [x] Tests cron jobs BetaCronService — 28 tests (PEN-132 ✅)
-- **Total : 77 tests, 0 échecs**
-- [ ] Tests integration API endpoints — supertest (PEN-131)
-- [ ] Test E2E flow complet (PEN-133)
+- [x] Tests concurrence — 8 tests (race conditions, retry P2034, bulk conflicts)
+- [x] Tests intégration API beta — 18 tests supertest (PEN-131 ✅)
+- [x] Tests intégration API admin beta — 20 tests supertest (PEN-131 ✅)
+- [x] Tests E2E beta flow — 10 tests Playwright (PEN-133 ✅)
+- [x] Tests E2E beta admin — 10 tests Playwright (PEN-133 ✅)
+- **Total : 141 tests beta, 0 échecs**
+
+**Fichiers tests :**
+- `pen-backend/src/services/__tests__/BetaService.test.ts` (22 tests)
+- `pen-backend/src/services/__tests__/BetaCronService.test.ts` (28 tests)
+- `pen-backend/src/services/__tests__/beta.concurrency.test.ts` (8 tests)
+- `pen-backend/src/services/admin/__tests__/betaAdminService.test.ts` (23 tests — Phase 9)
+- `pen-backend/src/routes/__tests__/beta.integration.test.ts` (18 tests)
+- `pen-backend/src/routes/__tests__/betaAdmin.integration.test.ts` (20 tests)
+- `pen-frontend/tests/e2e/beta.spec.ts` (10 tests)
+- `pen-frontend/tests/e2e/beta-admin.spec.ts` (10 tests)
 
 ---
 
@@ -200,7 +213,7 @@ Phase 7 (Tests)    Phase 9 (Admin)
 
 ---
 
-## Résumé du statut actuel (2026-02-28)
+## Résumé du statut actuel (2026-03-01)
 
 | Phase | Statut | Bloquant pour le launch ? |
 |-------|--------|--------------------------|
@@ -210,7 +223,7 @@ Phase 7 (Tests)    Phase 9 (Admin)
 | 4. Website | ✅ Complet | — |
 | 5. App (frontend) | ✅ Complet | — |
 | 6. Emails | ❌ Non commencé | Optionnel au launch (pas d'email de kick) |
-| 7. Tests | ⚠️ Unitaires OK, integ/E2E manquants | Optionnel au launch |
+| 7. Tests | ✅ Complet (141 tests) | — |
 | 8. Suppression | ❌ Non commencé | Oui — GDPR + comptes zombies |
 | 9. Admin | ✅ Complet | — |
 
