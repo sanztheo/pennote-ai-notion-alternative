@@ -1,6 +1,6 @@
 # Beta Management — Roadmap d'Implémentation
 
-> **Status:** Complet (hors Phase 6 Emails) | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-03-01
+> **Status:** Complet | **Date:** 2026-02-05 | **Dernière MAJ:** 2026-03-02
 
 ---
 
@@ -117,15 +117,21 @@
 
 ---
 
-## Phase 6 : Emails
+## Phase 6 : Emails ✅ (2026-03-02)
 
-- [ ] Template `beta-waitlist-confirmation` (PEN-128)
-- [ ] Template `beta-spot-available` (PEN-129)
-- [ ] Intégration service email Resend (PEN-144)
+- [x] Template `beta-waitlist-confirmation` (PEN-128)
+- [x] Template `beta-spot-available` (PEN-129)
+- [x] Intégration service email Resend (PEN-144)
 
-**Fichiers :**
-- `pen-backend/src/services/EmailService.ts`
-- `pen-backend/src/templates/emails/`
+**Fichiers créés :**
+- `pen-backend/src/services/EmailService.ts` — lazy Resend client, 2 méthodes fire-and-forget, HTML inline
+- `pen-backend/src/services/EmailService.types.ts` — interfaces + constantes
+- `pen-backend/src/services/__tests__/EmailService.test.ts` (10 tests)
+- `pen-backend/scripts/test-email.ts` — script de test manuel
+
+**Fichiers modifiés :**
+- `pen-backend/src/controllers/beta/waitlistController.ts` (hook email confirmation après inscription)
+- `pen-backend/src/services/BetaCronService.ts` (hook email spot-available après promotion)
 
 ---
 
@@ -140,7 +146,7 @@
 - [x] Tests E2E beta flow — 10 tests Playwright (PEN-133 ✅)
 - [x] Tests E2E beta admin — 10 tests Playwright (PEN-133 ✅)
 - **Total Phase 7 : 141 tests beta, 0 échecs**
-- **Grand total (avec Phase 8) : 190 tests beta, 0 échecs**
+- **Grand total (avec Phase 6 + 8) : 200 tests beta, 0 échecs**
 
 **Fichiers tests :**
 - `pen-backend/src/services/__tests__/BetaService.test.ts` (22 tests)
@@ -245,7 +251,7 @@ Phase 7 (Tests)    Phase 9 (Admin)
 | 3. Cron Jobs | ✅ Complet | — |
 | 4. Website | ✅ Complet | — |
 | 5. App (frontend) | ✅ Complet | — |
-| 6. Emails | ❌ Non commencé | Optionnel au launch (pas d'email de kick) |
+| 6. Emails | ✅ Complet (10 tests) | — |
 | 7. Tests | ✅ Complet (141 tests) | — |
 | 8. Suppression | ✅ Complet (49 tests) | — |
 | 9. Admin | ✅ Complet | — |
