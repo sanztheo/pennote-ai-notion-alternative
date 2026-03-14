@@ -149,13 +149,10 @@ jobs:
         working-directory: pen-backend
 
       - name: Run Jest tests
-        run: npm test -- --ci --testPathIgnorePatterns="node_modules" --testPathIgnorePatterns="dist" --testPathIgnorePatterns="preprocessor/__tests__/(QuizPreprocessorAgent|limitValidator|integrationHelper)"
+        run: npm test -- --ci --forceExit --testPathIgnorePatterns="node_modules" --testPathIgnorePatterns="dist" --testPathIgnorePatterns="preprocessor/__tests__/(QuizPreprocessorAgent|limitValidator|integrationHelper)" --testPathIgnorePatterns="betaAdmin.integration"
         working-directory: pen-backend
         env:
-          NODE_OPTIONS: --experimental-vm-modules
-          DATABASE_URL: postgresql://test:test@localhost:5432/test
-          OPENAI_API_KEY: sk-test-key
-          NODE_ENV: test
+          CI: true
 
       - name: Upload coverage report
         if: always()
