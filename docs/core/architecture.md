@@ -419,39 +419,63 @@ const apiClient = new ApiClient(VITE_API_URL);
 
 ## AI Architecture
 
-### Agent System (Vercel AI SDK v5)
+### Agent System (Vercel AI SDK v6)
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                         PENNOTE AI AGENT                                    │
 ├────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  PennoteAgent.ts                                                           │
+│  PennoteAgent.ts — Vercel AI SDK v6 with resumable streams                 │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
 │  │  streamText({                                                        │  │
-│  │    model: google('gemini-3-flash-preview'),                         │  │
+│  │    model: providerInstance(MODELS.AGENT_PRIMARY),                    │  │
 │  │    system: buildSystemPrompt(mode, context),                        │  │
 │  │    messages: convertToModelMessages(messages),                      │  │
 │  │    tools: {                                                          │  │
-│  │      ...ragTools,        // searchRagChunks, listAvailableSources   │  │
-│  │      ...workspaceTools,  // listWorkspacePages, readWorkspacePage   │  │
-│  │      ...webTools,        // searchWeb, searchWikipedia              │  │
-│  │      ...wikipediaTools,  // indexWikipediaArticle, searchWikipediaRag│  │
-│  │      ...pageTools,       // createPage, checkPageExists             │  │
+│  │      ...ragTools,        // 4 tools: search, list, read, checkStatus│  │
+│  │      ...workspaceTools,  // 3 tools: listPages, readPage, listProjs │  │
+│  │      ...webTools,        // 3 tools: searchWeb, searchWikipedia,    │  │
+│  │      //                           getWikipediaArticle               │  │
+│  │      ...pageTools,       // 2 tools: createPage, checkPageExists    │  │
+│  │      ...wikipediaTools,  // 4 tools: indexToRAG, fullContent,       │  │
+│  │      //                           searchRAG, listRAGSources         │  │
 │  │    },                                                                │  │
-│  │    maxSteps: config.maxSteps,  // 10-30 based on mode               │  │
+│  │    stopWhen: stepCountIs(maxSteps),  // 10-30 based on mode         │  │
+│  │    providerOptions: buildProviderOptions(modelName, thinking),       │  │
 │  │  })                                                                  │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 │  Agent Modes:                                                              │
-│  ┌────────────┬──────────┬──────────────────────────────────────────────┐ │
-│  │ Mode       │ maxSteps │ Tools                                        │ │
-│  ├────────────┼──────────┼──────────────────────────────────────────────┤ │
-│  │ ask        │ 10       │ RAG + Workspace                              │ │
-│  │ search     │ 25       │ RAG + Workspace + Web + Wikipedia            │ │
-│  │ create-quick│ 10      │ RAG + Workspace + Page                       │ │
-│  │ create-deep│ 30       │ RAG + Workspace + Web + Wikipedia + Page     │ │
-│  └────────────┴──────────┴──────────────────────────────────────────────┘ │
+│  ┌────────────┬──────────┬───────────┬──────────┬──────────────────────┐ │
+│  │ Mode       │ maxSteps │ maxTokens │ Thinking │ Credits              │ │
+│  ├────────────┼──────────┼───────────┼──────────┼──────────────────────┤ │
+│  │ ask        │ 10       │ 4096      │ minimal  │ 1.0                  │ │
+│  │ search     │ 25       │ 8192      │ high     │ 2.0                  │ │
+│  │ create-quick│ 10      │ 8192      │ low      │ 1.0                  │ │
+│  │ create-deep│ 30       │ 32000     │ high     │ 2.0                  │ │
+│  └────────────┴──────────┴───────────┴──────────┴──────────────────────┘ │
+│                                                                             │
+│  All tools are available to all modes — the difference is in maxSteps,     │
+│  thinking level, and system prompt intensity.                               │
+│                                                                             │
+│  Tool Sets (16 tools total, all with closure context {userId, workspaceId}):│
+│  ├── RAG:       listAvailableSources, searchRagChunks,                     │
+│  │              readRagSource, checkSourcesRagStatus                       │
+│  ├── Workspace: listWorkspacePages, readWorkspacePage,                     │
+│  │              listWorkspaceProjects                                      │
+│  ├── Web:       searchWeb (OpenAI Responses API), searchWikipedia,         │
+│  │              getWikipediaArticle                                        │
+│  ├── Page:      createPage, checkPageExists                                │
+│  └── Wikipedia: indexWikipediaToRAG, getWikipediaFullContent,              │
+│                 searchWikipediaRAG, listWikipediaRAGSources                │
+│                                                                             │
+│  Credit Costs by Operation:                                                │
+│  ├── Agent chat: 1.0 (ask, create-quick) / 2.0 (search, create-deep)     │
+│  ├── Content generation: 0.5                                               │
+│  ├── Specialized functions: 0.3                                            │
+│  ├── Graphics generation: 1.0                                              │
+│  └── Completions (proxy): 0.25                                             │
 │                                                                             │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -460,28 +484,37 @@ const apiClient = new ApiClient(VITE_API_URL);
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│                         AI PROVIDERS                                        │
+│                   AI PROVIDERS — 34 Models, 6 Providers                    │
 ├────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Primary: Google Gemini 3 Flash                                            │
-│  ├── Model: gemini-3-flash-preview                                        │
-│  ├── Features: Thinking mode, Long context                                │
-│  └── Use: Agent orchestration, Complex reasoning                          │
+│  OpenAI (14 models)                                                        │
+│  ├── GPT-5 family: gpt-5.2, gpt-5.1, gpt-5, gpt-5-mini, gpt-5-nano     │
+│  ├── GPT-4.1 family: gpt-4.1, gpt-4.1-mini, gpt-4.1-nano (1M context)  │
+│  ├── O-series: o3, o4-mini (reasoning-first)                              │
+│  ├── GPT-4o: gpt-4o, gpt-4o-mini                                         │
+│  └── Embeddings: text-embedding-3-small (1536D), text-embedding-3-large  │
 │                                                                             │
-│  Secondary: OpenAI                                                         │
-│  ├── Model: gpt-4o-mini (default), gpt-5-mini                            │
-│  ├── Features: Quiz generation, Content creation                          │
-│  └── Use: Quiz questions, Content improvement                             │
+│  Google Gemini (8 models)                                                  │
+│  ├── gemini-3.1-pro-preview, gemini-3-flash-preview, gemini-3-flash      │
+│  ├── gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite            │
+│  └── gemini-2.0-flash, gemini-2.0-flash-lite                             │
 │                                                                             │
-│  Tertiary: DeepSeek                                                        │
-│  ├── Model: deepseek-chat                                                 │
-│  ├── Features: Alternative provider                                       │
-│  └── Use: Fallback, Specific use cases                                    │
+│  Anthropic Claude (5 models)                                               │
+│  ├── claude-opus-4-6, claude-sonnet-4-6, claude-sonnet-4-5               │
+│  └── claude-haiku-4-5, claude-3-5-haiku                                   │
 │                                                                             │
-│  Embeddings: OpenAI                                                        │
-│  ├── Model: text-embedding-3-small                                        │
-│  ├── Dimensions: 1536                                                      │
-│  └── Use: RAG vector search                                               │
+│  DeepSeek (2 models)                                                       │
+│  └── deepseek-chat, deepseek-reasoner                                     │
+│                                                                             │
+│  Moonshot / Kimi (3 models)                                                │
+│  └── kimi-k2.5, kimi-k2-0905, kimi-k2-thinking                           │
+│                                                                             │
+│  xAI / Grok (2 models)                                                     │
+│  └── grok-3, grok-3-mini                                                  │
+│                                                                             │
+│  Default primary agent: kimi-k2.5 (overridable via AGENT_MODEL env var)   │
+│  Web search: gpt-4o-mini (OpenAI Responses API)                           │
+│  Embeddings: text-embedding-3-small, 1536 dimensions                      │
 │                                                                             │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -554,6 +587,160 @@ const apiClient = new ApiClient(VITE_API_URL);
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Webhook Architecture
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                    PADDLE WEBHOOK FLOW                                      │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Raw Body Ingestion                                                     │
+│     express.raw({ type: "application/json" }) BEFORE express.json()       │
+│     Body arrives as Buffer for HMAC signature verification                 │
+│                                                                             │
+│  2. Signature Verification                                                 │
+│     paddle.webhooks.unmarshal(rawBody, PADDLE_WEBHOOK_SECRET, signature)  │
+│     Rejects with 400 if signature invalid                                  │
+│                                                                             │
+│  3. Idempotency Check                                                      │
+│     webhookEvent.findUnique({ where: { eventId } })                       │
+│     If already processed → return 200 { skipped: true }                   │
+│                                                                             │
+│  4. User Resolution (3-tier fallback)                                      │
+│     a. customData.clerkUserId from checkout payload                       │
+│     b. paddleCustomerId → lookup UserSubscription                         │
+│     c. subscriptionId → lookup UserSubscription                           │
+│                                                                             │
+│  5. Event Processing                                                       │
+│     ┌─────────────────────────────────────────────────────────────────┐   │
+│     │ subscription.created     → Log + activate if trialing           │   │
+│     │ subscription.activated   → activatePremium() + syncLimits()    │   │
+│     │ subscription.updated     → updateSubscription() periods         │   │
+│     │ subscription.canceled    → finalizeCancel() or mark pending     │   │
+│     │ subscription.paused      → finalizeCancel() (temp free)        │   │
+│     │ subscription.resumed     → activatePremium() (re-enable)       │   │
+│     │ transaction.completed    → Log only (activation via sub event) │   │
+│     │ transaction.payment_failed → Log error code                    │   │
+│     └─────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  6. Idempotency Record                                                     │
+│     webhookEvent.create({ eventId, type, processedAt })                   │
+│     Stored AFTER successful processing to prevent replay                   │
+│                                                                             │
+│  7. Response                                                               │
+│     Always return 200 to Paddle (even for unhandled events)               │
+│     Paddle retries on non-2xx → idempotency prevents double processing   │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Admin & Monitoring Layer
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                    ADMIN DASHBOARD ARCHITECTURE                             │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Dashboard Panels (10 metric panels):                                      │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │  1. UserMetricsPanel     — total, active, new, churn, growth       │  │
+│  │  2. RevenueMetricsPanel  — MRR, ARR, conversion, ARPU             │  │
+│  │  3. UsageMetricsPanel    — AI credits, quizzes, pages usage       │  │
+│  │  4. UserManagementPanel  — CRUD users, search, filters            │  │
+│  │  5. UserPagesPanel       — per-user page inspection               │  │
+│  │  6. BetaManagementPanel  — waitlist, active, status changes       │  │
+│  │  7. TrendsPanel          — usage trends over time                 │  │
+│  │  8. RetentionCohortsPanel — weekly cohort retention analysis      │  │
+│  │  9. AlertsPanel          — system alerts and notifications        │  │
+│  │  10. LtvPanel            — customer lifetime value metrics        │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  Impersonation System:                                                     │
+│  ├── Admin can impersonate any user via adminController                   │
+│  ├── Session stored in sessionStorage (not persisted across tabs)         │
+│  └── Security: admin-only middleware, logged action                       │
+│                                                                             │
+│  Cron Jobs (node-cron):                                                    │
+│  ┌────────────────────────────────────────────────────────────────┐       │
+│  │  Health check           │ Every 6 hours      │ DB connectivity  │       │
+│  │  RAG cleanup            │ Daily at 3:00 AM   │ Unused embeddings│       │
+│  │  Daily article (Futura) │ Daily at midnight   │ RSS fetch       │       │
+│  │  Monthly reset          │ Daily at 2:00 AM   │ Free user limits │       │
+│  │  Daily limits reset     │ Daily at midnight   │ Quiz limits     │       │
+│  │  Beta: inactive check   │ Hourly (:00)       │ 7-day threshold  │       │
+│  │  Beta: waitlist promote │ Hourly (:10)       │ Fill free spots  │       │
+│  │  Beta: expired cleanup  │ Hourly (:20)       │ Past deadline    │       │
+│  │  Beta: weekly reset     │ Monday 00:00 UTC   │ Activity counters│       │
+│  └────────────────────────────────────────────────────────────────┘       │
+│                                                                             │
+│  BullMQ Workers:                                                           │
+│  ├── quiz.worker.ts     — Async quiz generation pipeline                  │
+│  ├── futura.worker.ts   — Scheduled Futura RSS article processing         │
+│  └── export.worker.ts   — Admin CSV export for bulk data                  │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Beta System Architecture
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                    BETA MANAGEMENT SYSTEM                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Status Lifecycle:                                                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │  waitlisted ──(spot available)──► active                            │  │
+│  │       │                              │                               │  │
+│  │       │                    (7 days no heartbeat)                     │  │
+│  │       │                              │                               │  │
+│  │       │                              ▼                               │  │
+│  │       │                          inactive ──(reactivation)──► active│  │
+│  │       │                              │                               │  │
+│  │       │                 (14-day reactivation window passed)          │  │
+│  │       │                              │                               │  │
+│  │       │                              ▼                               │  │
+│  │       │                          expired                            │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  Heartbeat Tracking:                                                       │
+│  ├── Frontend sends heartbeat every 30s while tab is visible              │
+│  ├── Pauses on document.visibilitychange (tab hidden)                     │
+│  ├── Backend increments weeklyActiveTimeSeconds + weeklySessionCount      │
+│  ├── Min interval: 25s (prevents spam)                                    │
+│  └── Used by BetaCronService.checkInactiveUsers() (7-day threshold)       │
+│                                                                             │
+│  Capacity Management:                                                      │
+│  ├── TOTAL_BETA_SPOTS = 100                                               │
+│  ├── Spots tracked via Redis cache (beta:active_count, 30s TTL)           │
+│  ├── Waitlist promotion: Serializable transaction with P2034 retry        │
+│  └── Race condition safe: atomic count + promote in same transaction      │
+│                                                                             │
+│  Email Notifications (Resend):                                             │
+│  ├── sendSpotAvailable() — when user promoted from waitlist               │
+│  ├── Fire-and-forget pattern (.catch() logged, never blocks)              │
+│  └── Batched: 5 emails per batch, 1s delay between batches               │
+│                                                                             │
+│  Kill Switch:                                                              │
+│  ├── config/beta.ts: export const BETA_LIVE = true                        │
+│  ├── When false: all beta endpoints return 503, cron jobs skipped         │
+│  └── Remove file entirely once beta is permanently live                   │
+│                                                                             │
+│  Key Files:                                                                │
+│  ├── config/beta.ts              Kill switch flag                         │
+│  ├── services/BetaService.types.ts  Constants + interfaces                │
+│  ├── services/BetaCronService.ts    Hourly cron job logic                 │
+│  ├── routes/beta.ts              Public beta endpoints                    │
+│  ├── controllers/beta/           Status, heartbeat, waitlist, reactivate  │
+│  └── services/admin/betaAdminService.ts  Admin beta management           │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## Background Jobs Architecture
@@ -566,16 +753,21 @@ const apiClient = new ApiClient(VITE_API_URL);
 │  Queues:                                                                   │
 │  ├── quiz-processing     Quiz generation jobs                             │
 │  ├── concept-extraction  Async concept extraction from pages              │
-│  └── futura              Scheduled future tasks                           │
+│  ├── futura              Futura Sciences RSS article processing           │
+│  └── export              Admin CSV data export                            │
 │                                                                             │
 │  Workers:                                                                  │
-│  ├── quiz.worker.ts      Processes quiz generation                        │
-│  └── futura.worker.ts    Processes scheduled tasks                        │
+│  ├── quiz.worker.ts      Processes quiz generation pipeline               │
+│  ├── futura.worker.ts    Processes Futura RSS articles                    │
+│  └── export.worker.ts    Admin CSV export for bulk data                   │
 │                                                                             │
-│  Cron Jobs:                                                                │
-│  ├── Monthly limits reset   1st of month at 00:00                         │
-│  ├── Daily article fetch    Every day at 08:00                            │
-│  └── Stale session cleanup  Every hour                                    │
+│  Cron Jobs (node-cron, Europe/Paris timezone):                             │
+│  ├── Health check             Every 6 hours         DB connectivity       │
+│  ├── RAG cleanup              Daily at 3:00 AM      Unused embeddings    │
+│  ├── Daily article (Futura)   Daily at midnight      RSS fetch            │
+│  ├── Monthly limits reset     Daily at 2:00 AM       Free user quotas    │
+│  ├── Daily quiz limits reset  Daily at midnight      24h quiz reset       │
+│  └── Beta crons (4 jobs)      Hourly + weekly        See Beta section    │
 │                                                                             │
 └────────────────────────────────────────────────────────────────────────────┘
 ```

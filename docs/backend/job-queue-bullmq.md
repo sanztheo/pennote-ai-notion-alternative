@@ -16,7 +16,8 @@ Documentation de l'architecture des jobs asynchrones avec BullMQ et Redis.
 │                                                                  │
 │  WORKERS (pen-backend/src/workers/)                             │
 │  ├── quiz.worker.ts          → concurrency: 3                   │
-│  └── futura.worker.ts        → concurrency: 1                   │
+│  ├── futura.worker.ts        → concurrency: 1                   │
+│  └── export.worker.ts        → concurrency: 2 (admin CSV)      │
 │                                                                  │
 │  JOBS (pen-backend/src/jobs/)                                   │
 │  ├── extractConcepts.ts      → Extraction concepts pages        │
@@ -37,6 +38,7 @@ Documentation de l'architecture des jobs asynchrones avec BullMQ et Redis.
 | `futura` | refresh-weekly-article | 3 | Articles scientifiques |
 | `concept-extraction` | extract-single | 5 | Extraction concepts pages |
 | `ai-generation` | (reserve) | 5 | Generation contenu AI |
+| `admin-export` | export-users | 3 | Export CSV utilisateurs (admin) |
 
 ## 3. Configuration des Workers
 
@@ -65,6 +67,18 @@ export const futuraWorker = new Worker<FuturaJobData, FuturaResult>(
     limiter: { max: 5, duration: 60000 },
   }
 );
+
+// pen-backend/src/workers/export.worker.ts
+export const exportWorker = new Worker<ExportJobData, ExportResult>(
+  "admin-export",
+  processExportJob,
+  {
+    connection: redis,
+    concurrency: 2,          // 2 exports en parallele max
+    limiter: { max: 20, duration: 60000 },  // 20 jobs/min
+  }
+);
+// Resultat stocke dans Redis (TTL 5 min) pour download admin
 ```
 
 ## 4. Retry et Exponential Backoff
@@ -185,7 +199,7 @@ myWorker.on("failed", async (job, error) => {
 
 // 4. Enregistrer dans workers/index.ts
 import { myWorker } from "./myFeature.worker.js";
-const workers = [quizWorker, futuraWorker, myWorker];
+const workers = [quizWorker, futuraWorker, exportWorker, myWorker];
 ```
 
 ## 8. Debugging Jobs Bloques

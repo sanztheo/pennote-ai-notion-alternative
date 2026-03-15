@@ -18,7 +18,7 @@ Architecture de collaboration temps reel avec Yjs CRDT et WebSocket.
 │  ├── ws.WebSocketServer (noServer mode)                         │
 │  ├── HTTP upgrade handler (auth + rate limit)                   │
 │  ├── PrismaPersistence (y-prisma.ts)                            │
-│  └── In-memory Y.Doc cache per page                             │
+│  └── LRU Y.Doc cache (max 500, 30min TTL)                       │
 │                                                                  │
 │  DATABASE (Prisma)                                              │
 │  ├── YjsDocument (page_id, data)                                │
@@ -81,7 +81,45 @@ const pageAccess = await prisma.page.findFirst({
 if (!pageAccess) { ws.close(1008, "Access denied"); return; }
 ```
 
-## 6. Rate Limiting (Memory-Based)
+## 6. Input Validation
+
+### UUID Validation
+
+All WebSocket routes validate `pageId` (and `processId` for quiz-progress) against UUID format
+before any database query or document lookup:
+
+```typescript
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Collaboration & save routes
+if (!uuidRegex.test(pageId)) {
+  ws.close(1008, "Format UUID invalide");
+  return;
+}
+
+// Quiz-progress route (SEC-04)
+if (!uuidRegex.test(processId)) {
+  socket.destroy();
+  return;
+}
+```
+
+### Message Payload Limit
+
+The WebSocketServer enforces a **1 MB max payload** at the transport level.
+Oversized messages trigger the `ws.on('error')` handler which closes the connection:
+
+```typescript
+const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 }); // 1 MB
+
+ws.on("error", (err) => {
+  if (err.message.includes("payload")) {
+    ws.close(1009, "Message trop volumineux");
+  }
+});
+```
+
+## 7. Rate Limiting (Memory-Based)
 
 ```typescript
 // pen-backend/src/middlewares/websocketRateLimit.ts
@@ -91,14 +129,24 @@ const WS_RATE_LIMIT = {
   windowMs: 60000
 };
 
-// Connection limit per IP
-checkWebSocketConnectionLimit(clientIp)  // → true/false
+// Connection limit per IP (checked during HTTP upgrade)
+checkWebSocketConnectionLimit(clientIp)  // → true/false, returns 429 if exceeded
 
-// Message limit per WebSocket instance
-checkWebSocketMessageLimit(ws)           // → true/false
+// Message limit per WebSocket instance (checked per incoming message)
+checkWebSocketMessageLimit(ws)           // → true/false, closes connection if exceeded
+
+// Cleanup tracker state when a connection closes
+cleanupWebSocketTrackers(ws)
+
+// Periodic garbage collection of stale IP trackers (every 5 minutes)
+startWebSocketCleanup()
 ```
 
-## 7. Yjs CRDT Persistence (y-prisma.ts)
+Rate limit behavior differs per route:
+- **collaboration**: exceeding message limit closes the connection (`ws.close(1008)`)
+- **save**: exceeding message limit drops the message and sends a `save-error` response
+
+## 8. Yjs CRDT Persistence (y-prisma.ts)
 
 ```
 ┌─────────────────────────────────────────┐
@@ -142,7 +190,7 @@ async flushDocument(pageId: string) {
 }
 ```
 
-## 8. Conflict Resolution (CRDT)
+## 9. Conflict Resolution (CRDT)
 
 Yjs uses CRDT (Conflict-free Replicated Data Types):
 - No conflicts by design - operations commute
@@ -150,23 +198,61 @@ Yjs uses CRDT (Conflict-free Replicated Data Types):
 - Updates merge automatically via vector clocks
 - Server just relays, no merge logic needed
 
-## 9. Memory Management
+## 10. Memory Management
+
+### LRU Cache with Eviction Policy
+
+Documents are cached in an **LRU cache** (not a plain `Map`) with bounded size and TTL:
 
 ```typescript
-const docs = new Map<string, Y.Doc>();       // In-memory cache
-const connections = new Map<string, number>(); // Connection count
+import { LRUCache } from "lru-cache";
+
+const YJS_MAX_DOCS = 500;           // Max 500 docs in memory
+const YJS_TTL_MS = 30 * 60 * 1000;  // 30 min idle TTL
+
+const docs = new LRUCache<string, Y.Doc>({
+  max: YJS_MAX_DOCS,
+  ttl: YJS_TTL_MS,
+  dispose: (doc: Y.Doc, pageId: string) => {
+    // Only evict if no active connections
+    const activeConns = connections.get(pageId) || 0;
+    if (activeConns > 0) return;
+    persistence.flushDocument(pageId);  // Compact to DB
+    doc.destroy();                      // Free memory
+    connections.delete(pageId);
+  },
+  noDisposeOnSet: true,     // Don't evict when overwriting
+  updateAgeOnGet: true,     // Reset TTL on access
+});
+```
+
+Key behaviors:
+- **Max 500 docs**: least-recently-used doc evicted when limit is reached
+- **30 min idle TTL**: docs not accessed for 30 min are evicted automatically
+- **Safe eviction**: dispose callback skips docs with active connections
+- **Flush on eviction**: data is persisted to DB before memory is freed
+
+### Connection-Based Cleanup
+
+When all clients disconnect from a page, the doc is flushed and removed immediately
+(regardless of LRU state):
+
+```typescript
+const connections = new Map<string, number>(); // Connection count per page
 
 ws.on('close', () => {
-  const count = connections.get(pageId) - 1;
+  const count = (connections.get(pageId) || 1) - 1;
+  connections.set(pageId, count);
   if (count <= 0) {
     persistence.flushDocument(pageId);  // Compact to DB
     doc.destroy();                      // Free memory
     docs.delete(pageId);
+    connections.delete(pageId);
   }
 });
 ```
 
-## 10. Debugging
+## 11. Debugging
 
 ```bash
 # Monitor WebSocket connections
@@ -183,14 +269,14 @@ ws.on('close', () => {
 [Yjs] Document supprime de la memoire pour la page: xxx
 ```
 
-## 11. Environment Variables
+## 12. Environment Variables
 
 ```bash
 RATE_LIMIT_WS_CONNECTIONS=10   # Max new connections/min/IP
 RATE_LIMIT_WS_MESSAGES=100     # Max messages/min/connection
 ```
 
-## 12. Key Files
+## 13. Key Files
 
 | File | Purpose |
 |------|---------|
@@ -198,3 +284,4 @@ RATE_LIMIT_WS_MESSAGES=100     # Max messages/min/connection
 | `src/lib/y-prisma.ts` | Yjs-Prisma persistence adapter |
 | `src/middlewares/websocketRateLimit.ts` | Connection/message rate limiting |
 | `src/services/auth.ts` | JWT verification for WebSocket |
+| `src/services/progressService.ts` | Quiz-progress WebSocket connection manager |
