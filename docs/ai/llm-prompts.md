@@ -1,631 +1,394 @@
-# LLM Prompts & Multi-Provider Architecture
+# LLM Prompts — Agent Pennote
 
-This document consolidates the LLM prompt engineering guidelines, multi-provider routing strategies, and optimization techniques for the Pennote assistant system.
+> Derniere mise a jour : 2026-03-15
+>
+> Ce document decrit la construction des system prompts XML, les 4 modes agent,
+> la personnalisation utilisateur, et les outils disponibles.
 
 ---
 
 ## Table of Contents
 
 1. [Architecture Overview](#1-architecture-overview)
-2. [Provider Capabilities & Selection](#2-provider-capabilities--selection)
-3. [Routing Strategy by Mode](#3-routing-strategy-by-mode)
-4. [Prompt Templates](#4-prompt-templates)
-5. [Structured Outputs](#5-structured-outputs)
-6. [Context Management](#6-context-management)
-7. [Query Optimization](#7-query-optimization)
-8. [Claude Models Reference](#8-claude-models-reference)
-9. [Best Practices](#9-best-practices)
-10. [Implementation Metrics](#10-implementation-metrics)
+2. [System Prompt Structure (XML)](#2-system-prompt-structure-xml)
+3. [Agent Modes](#3-agent-modes)
+4. [Prompt Sections in Detail](#4-prompt-sections-in-detail)
+5. [Tool Descriptions in Prompts](#5-tool-descriptions-in-prompts)
+6. [Workflows (Advanced)](#6-workflows-advanced)
+7. [Output Format Rules](#7-output-format-rules)
+8. [Best Practices](#8-best-practices)
 
 ---
 
 ## 1. Architecture Overview
 
-### Phase-Based System
+### Vercel AI SDK v6 Agent
+
+L'agent Pennote utilise `streamText` du SDK AI v6 en mode agentic (multi-step tool calling).
+Il n'y a plus de systeme "Phase 1 planning JSON + Phase 2 generation" — l'agent decide
+lui-meme quels outils appeler et quand repondre.
 
 ```
-PHASE 1: Tool Decision & Execution (Agentic Loop)
-├── First Thinking      → Generate JSON plan (tool sequence)
-├── Intermediate Loop   → Execute tools + refine arguments
-├── Tool Execution      → Run tools (RAG, web, Wikipedia)
-└── Scoring & Feedback  → Evaluate results + adjust strategy
-                              ↓
-PHASE 2: Final Generation (Intent-Adapted Response)
-├── Intent Detection    → Create / Explain / List
-├── Response Generation → Stream final content to user
-└── Wikipedia Footer    → Add license info if applicable
+User Message
+    ↓
+streamText({ model, system, messages, tools, stopWhen: stepCountIs(maxSteps) })
+    ↓
+┌─────────────────────────────────────────────┐
+│  Agentic Loop (up to maxSteps)              │
+│  ├── LLM decides: respond or call tool      │
+│  ├── Tool execution (RAG, web, workspace)   │
+│  ├── Tool results injected into context     │
+│  └── Repeat until LLM chooses to respond    │
+└─────────────────────────────────────────────┘
+    ↓
+Streamed Response (Markdown + LaTeX)
 ```
 
 ### Key Design Principles
 
-1. **No emojis** - Keep prompts professional and clean
-2. **Soft language** - Use "prefer", "bias towards", "should" instead of "MUST", "NEVER"
-3. **Guidance over rules** - Suggest strategies rather than mandate behaviors
-4. **Contextual flexibility** - Allow AI to adapt based on situation
-5. **Concise and direct** - Avoid repetition, get to the point
+1. **XML-structured prompts** — clear sections with semantic tags
+2. **English prompts, French default response** — prompts in English, responses in user's language (default French)
+3. **Soft language in prompts** — "prefer", "bias towards" instead of "MUST", "NEVER" (except for critical rules)
+4. **Personalization injection** — user profile injected into every prompt
+5. **Mode-driven behavior** — same model, different system prompt and limits per mode
+6. **Thinking level, not model swap** — thinking controlled via `providerOptions`, not separate models
+
+### Source Files
+
+| File | Purpose |
+|---|---|
+| `pen-backend/src/services/agent/systemPrompts.ts` | System prompt builder (XML sections) |
+| `pen-backend/src/services/agent/PennoteAgent.ts` | Agent runner (`streamText` call) |
+| `pen-backend/src/services/agent/types.ts` | Mode configs (maxSteps, maxTokens, thinking) |
+| `pen-backend/src/services/agent/workflows.ts` | Advanced workflows (parallel search, eval loop) |
 
 ---
 
-## 2. Provider Capabilities & Selection
+## 2. System Prompt Structure (XML)
 
-### Provider Comparison Matrix
-
-| Capability | Claude Sonnet 4.5 | GPT-4o-mini | GPT-4o |
-|---|---|---|---|
-| **Reasoning Depth** | Excellent | Good | Very Good |
-| **Speed** | 3-5s | 1-2s | 3-4s |
-| **Cost (input/1M)** | $3.00 | $0.15 | $2.50 |
-| **Cost (output/1M)** | $15.00 | $0.60 | $10.00 |
-| **Context Window** | 200K | 128K | 128K |
-| **Structured Output** | XML-based | JSON mode | JSON mode |
-| **Tool Calling** | Native | Native | Native |
-
-### Claude Haiku Models
-
-| Model | ID | Max Output | Input Cost | Output Cost |
-|-------|-----|------------|------------|-------------|
-| **Haiku 3.5** | `claude-3-5-haiku-20241022` | 8,192 tokens | $0.80/1M | $4.00/1M |
-| **Haiku 3** | `claude-3-haiku-20240307` | 4,096 tokens | $0.25/1M | $1.25/1M |
-
-**Important**: Always use complete model IDs with date suffixes. There is no Claude Haiku 4.
-
-### Cost Analysis by Mode
-
-| Mode | GPT-4o-mini | Claude Sonnet | Winner |
-|------|-------------|---------------|--------|
-| **ASK** (1-3 tools, ~3K tokens) | $0.0015 | $0.015 | GPT-4o-mini (10x cheaper) |
-| **SEARCH** (3-8 tools, ~15K tokens) | $0.008 | $0.060 | GPT-4o-mini for budget, Claude for quality |
-| **CREATE** (content, ~20K tokens) | $0.015 | $0.090 | Claude for creativity (6x more expensive) |
-
----
-
-## 3. Routing Strategy by Mode
-
-### Mode: ASK (Fast Response)
-
-**Objective**: Speed < 3s, cost < $0.002
-
-```typescript
-{
-  firstThinking: { provider: 'gpt-4o-mini', temperature: 0.3, maxTokens: 800 },
-  intermediateThinking: { provider: 'gpt-4o-mini', temperature: 0.3, maxTokens: 400 },
-  generation: { provider: 'gpt-4o-mini', temperature: 0.3, maxTokens: 2000 }
-}
-```
-
-**Upgrade triggers**:
-- Quality score < 0.5 after Phase 1 → Retry with GPT-4o
-- Math/LaTeX detected → Use GPT-4o for Phase 2
-
-### Mode: SEARCH (Deep Exploration)
-
-**Objective**: Quality > speed, comprehensive exploration
-
-```typescript
-{
-  firstThinking: { provider: 'claude-sonnet-4-5', temperature: 0.3, maxTokens: 1200 },
-  intermediateThinking: { provider: 'gpt-4o-mini', temperature: 0.3, maxTokens: 400 },
-  generation: { provider: 'claude-sonnet-4-5', temperature: 0.4, maxTokens: 6000 }
-}
-```
-
-**Adaptive routing**:
-- avgScore > 0.85 → Downgrade to GPT-4o-mini for Phase 2 (cost savings)
-- avgScore < 0.5 → Maintain Claude for better synthesis
-
-### Mode: CREATE (Content Generation)
-
-**Objective**: Creativity + quality, structured output
-
-```typescript
-{
-  firstThinking: { provider: 'claude-sonnet-4-5', temperature: 0.4, maxTokens: 1200 },
-  intermediateThinking: { provider: 'gpt-4o-mini', temperature: 0.3, maxTokens: 400 },
-  generation: { provider: 'claude-sonnet-4-5', temperature: 0.6, maxTokens: 8000 }
-}
-```
-
-### Fallback Chain
-
-```
-Claude Sonnet 4.5 → GPT-4o → GPT-4o-mini
-```
-
-**Timeouts**: Claude: 30s, GPT-4o: 20s, GPT-4o-mini: 15s
-
----
-
-## 4. Prompt Templates
-
-### Provider-Specific Formatting
-
-**Claude Sonnet** prefers:
-- XML-style structured prompts with clear sections
-- Explicit role definitions
-- Reasoning chains and "thinking out loud"
-- Few-shot examples
-
-**GPT-4o-mini** prefers:
-- Concise, directive prompts
-- JSON schemas for structured output
-- Numbered lists and bullet points
-- Front-loaded critical information
-
-### First Thinking Prompt (Optimized)
-
-```typescript
-const CORE_PLANNING_INSTRUCTIONS = `Create a JSON plan to answer the user query efficiently.
-
-CRITICAL RULES:
-1. Small talk (greetings/thanks) → {"plan": {"totalIterations": 0, "toolSequence": []}}
-2. Always optimize user query for better results
-3. Build optimal tool sequence based on context
-4. Return ONLY valid JSON (no text before/after)`;
-
-const CONTEXT_MODES = {
-  web_only: `WEB-ONLY MODE: No local sources available.
-Strategy: Use search_web 2-4 times with different query angles.
-Start: search_web at step 1 (skip listing).`,
-
-  single_source: `SINGLE SOURCE MODE: User selected source {sourceId}.
-Strategy: Read this source first, explore others if insufficient.`,
-
-  all_source: `EXPLORATION MODE: No specific source.
-Sequence: list_available_sources → list_global_wikipedia → select → read.
-Web: Optional enrichment.`
-};
-
-const TOOLS_REFERENCE = `TOOLS:
-LIST: list_available_sources, list_global_wikipedia_sources
-READ: read_rag_source(sourceId, query), select_relevant_sources(question, sources)
-WEB: search_web(query string only)`;
-
-const JSON_SCHEMA = `OUTPUT SCHEMA:
-{
-  "plan": {
-    "totalIterations": <0-8>,
-    "reasoning": "<brief strategy>",
-    "optimizedQuery": "<improved query>",
-    "toolSequence": [{"step": 1, "toolName": "...", "description": "..."}]
-  }
-}`;
-```
-
-### Intermediate Thinking Prompt (Optimized)
-
-```typescript
-const CORE_ANALYSIS = `Analyze tool results and decide next action.
-
-CRITICAL:
-1. Review results from executed tools
-2. Assess if information is sufficient for user query
-3. Decide: continue (next tool + args) or stop (sufficient info)
-4. Return ONLY valid JSON`;
-
-const STRATEGY_GUIDANCE = `STRATEGY (adaptive, not strict):
-- Local sources with good scores (>0.7) → Consider stopping or web enrichment
-- Local sources with low scores (<0.4) → Explore more or use web
-- No sources found → Must use next tool in plan`;
-
-const JSON_OUTPUT_SCHEMA = `OUTPUT:
-{
-  "thinking": "<brief analysis>",
-  "shouldContinue": <boolean>,
-  "nextToolName": "<tool_name_or_null>",
-  "toolArguments": {<args_for_tool>}
-}`;
-```
-
-### Phase 2 Generation Templates
-
-```typescript
-const INTENT_INSTRUCTIONS = {
-  create: `CREATE MODE: Generate original content based on user request.
-- User query = WHAT to create
-- Tool results = CONTEXT to enrich
-- Be creative and engaging`,
-
-  explain: `EXPLAIN MODE: Provide comprehensive explanation.
-Structure: Introduction → Development → Conclusion
-Min: 300 words | Use lists, tables, examples`,
-
-  list: `LIST MODE: Structured enumeration.
-Format: Bullet points or numbered, grouped by categories`
-};
-```
-
-### Claude-Optimized XML Template
+The system prompt is assembled by `buildSystemPrompt(mode, options)` and wrapped in a `<system>` tag.
+Sections are included conditionally based on mode and available data.
 
 ```xml
-<prompt>
-<role>Planning AI creating structured tool execution plans</role>
+<system>
+<identity>
+You are a {role} within Pennote, an intelligent note-taking application.
+Your primary objective: {objective}
+</identity>
 
-<instructions priority="critical">
-1. Detect small talk → return empty plan (totalIterations: 0)
-2. Analyze user query and context
-3. Create optimal tool sequence
-4. Optimize query for better results
-</instructions>
+<behavior>
+- Rule 1
+- Rule 2
+- ...
+</behavior>
 
-<context>
-  <mode>{contextType}</mode>
-  <sources>{sourcesInfo}</sources>
-</context>
+<research_workflow>          <!-- only for search + create-deep modes -->
+...
+</research_workflow>
 
-<thinking>
-Let me analyze the request:
-- What is the user asking for?
-- What tools would be most effective?
-- What's the optimal sequence?
-</thinking>
+<content_guidelines>         <!-- only for create-quick + create-deep modes -->
+...
+</content_guidelines>
 
-<output_schema>
-{
-  "plan": {
-    "totalIterations": <0-8>,
-    "reasoning": "<brief>",
-    "optimizedQuery": "<improved>",
-    "toolSequence": [...]
-  }
-}
-</output_schema>
+<user_profile>               <!-- only if personalization data exists -->
+Name: ...
+Level: ...
+Field of study: ...
+</user_profile>
 
-<user_query>{query}</user_query>
-</prompt>
+<provided_sources>           <!-- only if ragSources provided -->
+The user has explicitly attached N source(s) to this request.
+Sources to read: ...
+</provided_sources>
+
+<conversation_context>       <!-- only if conversation history exists -->
+...
+</conversation_context>
+
+<available_tools>
+Tool strategy: ...
+RAG Tools: ...
+Workspace Tools: ...
+Web Tools: ...
+Wikipedia RAG Tools: ...
+</available_tools>
+
+<output_format>
+IMPORTANT: Respond with PLAIN TEXT using Markdown formatting.
+LaTeX: $formula$ (inline), never $$
+Language: Respond in the user's language (default: French)
+</output_format>
+</system>
 ```
 
 ---
 
-## 5. Structured Outputs
+## 3. Agent Modes
 
-### Zod Schemas for Type-Safe Parsing
+Source : `pen-backend/src/services/agent/types.ts`
 
-```typescript
-import { z } from 'zod';
+### Mode Configuration
 
-export const ToolStepSchema = z.object({
-  step: z.number().int().positive(),
-  toolName: z.enum([
-    'list_available_sources',
-    'list_global_wikipedia_sources',
-    'select_relevant_sources',
-    'read_rag_source',
-    'search_rag_chunks',
-    'search_web',
-    'read_workspace_page',
-    'list_workspace_pages',
-    'check_sources_rag_status'
-  ]),
-  description: z.string().min(5).max(200)
-});
+| Mode | Role | maxSteps | maxTokens | Thinking | createPage |
+|---|---|---|---|---|---|
+| `ask` | Intelligent assistant and educator | 10 | 4096 | minimal | optional |
+| `search` | Expert deep research analyst | 25 | 8192 | high | optional |
+| `create-quick` | Efficient content writer | 10 | 8192 | low | REQUIRED |
+| `create-deep` | Expert researcher and comprehensive content creator | 30 | 32000 | high | REQUIRED |
 
-export const FirstThinkingPlanSchema = z.object({
-  plan: z.object({
-    totalIterations: z.number().int().min(0).max(8),
-    reasoning: z.string().min(10).max(300),
-    optimizedQuery: z.string().max(500),
-    toolSequence: z.array(ToolStepSchema)
-  })
-});
+### Mode: ASK
 
-export const IntermediateThinkingSchema = z.object({
-  thinking: z.string().min(10).max(500),
-  shouldContinue: z.boolean(),
-  nextToolName: z.string().nullable(),
-  toolArguments: z.record(z.any())
-});
-```
+- Answer questions clearly and accurately using available sources
+- Consult RAG sources first when provided
+- Admit when information cannot be found
+- `createPage` only used when explicitly requested by user
 
-### OpenAI Structured Outputs Usage
+### Mode: SEARCH
 
-```typescript
-const response = await openai.beta.chat.completions.parse({
-  model: 'gpt-4o-2024-08-06',
-  messages: [...],
-  response_format: {
-    type: 'json_schema',
-    json_schema: {
-      name: 'first_thinking_plan',
-      strict: true,
-      schema: zodToJsonSchema(FirstThinkingPlanSchema)
-    }
-  },
-  temperature: 0.3,
-  max_tokens: 800
-});
+- Deep research mode — thorough, multi-step investigation
+- Never give quick answers — always research extensively first
+- Cross-reference information from multiple sources
+- 9-step research workflow: Planning -> Broad Search -> Wikipedia Deep Dive -> Semantic Search -> Workspace -> RAG Sources -> Cross-Reference -> Fill Gaps -> Synthesize
+- Minimum 4-6 different tool calls before responding
+- Always cite sources
 
-// Guaranteed valid parsing
-const plan = FirstThinkingPlanSchema.parse(JSON.parse(response.choices[0].message.content));
-```
+### Mode: CREATE-QUICK
 
-### Claude Tool Use Alternative
+- Generate concise content (500-1500 words)
+- `createPage` is MANDATORY
+- Short paragraphs and bullet points
+- One heading level sufficient (## for sections)
 
-```typescript
-const claudePlanningTool = {
-  name: "create_tool_plan",
-  description: "Create a structured plan for executing tools",
-  input_schema: {
-    type: "object",
-    properties: {
-      totalIterations: { type: "number" },
-      reasoning: { type: "string" },
-      optimizedQuery: { type: "string" },
-      toolSequence: { type: "array", items: { ... } }
-    },
-    required: ["totalIterations", "reasoning", "optimizedQuery", "toolSequence"]
-  }
-};
+### Mode: CREATE-DEEP
 
-const response = await anthropic.messages.create({
-  model: 'claude-3-5-sonnet-20241022',
-  max_tokens: 1024,
-  tools: [claudePlanningTool],
-  messages: [...]
-});
-
-const toolUse = response.content.find(block => block.type === 'tool_use');
-const plan = toolUse.input; // Already parsed
-```
+- Deep creation with extensive research BEFORE writing
+- Three phases: Research -> Plan -> Write
+- `createPage` is MANDATORY
+- Mandatory minimum 4000-8000 words
+- 4+ heading levels, 8-15 major sections
+- Uses XML sub-tags in content guidelines: `<length_requirements>`, `<structure_requirements>`, `<content_depth>`, `<formatting_requirements>`, `<quality_constraints>`
 
 ---
 
-## 6. Context Management
+## 4. Prompt Sections in Detail
 
-### Problem: Exponential Context Growth
+### Identity Section
 
+```xml
+<identity>
+You are a {role} within Pennote, an intelligent note-taking application.
+Your primary objective: {objective}
+</identity>
 ```
-Iteration 0:  2.5k tokens
-Iteration 3:  9.8k tokens
-Iteration 6:  18.2k tokens → OVERFLOW
-Iteration 10: 28.5k tokens → CRASH
-```
 
-### Solution: Window-Based Context Management
+Roles vary by mode — from "intelligent assistant and educator" (ask) to "expert researcher and comprehensive content creator" (create-deep).
+
+### Behavior Section
+
+Each mode has specific behavior rules as bullet points. Key differences:
+
+- **ask**: consult sources first, admit gaps, adapt language level
+- **search**: DEEP RESEARCH MODE, never quick answers, use thinking capabilities
+- **create-quick**: concise, factual, MUST call createPage
+- **create-deep**: extensive research BEFORE writing, MUST call createPage
+
+### User Profile Section (Personalization)
+
+Injected from `UserPersonalization` interface:
 
 ```typescript
-export class WindowContextManager {
-  private readonly WINDOW_SIZE = 5;
-  private readonly MAX_TOKENS = 12000;
-  private readonly SUMMARY_THRESHOLD = 1000;
-
-  async addToolResult(
-    messages: Message[],
-    toolName: string,
-    result: string
-  ): Promise<Message[]> {
-    // Summarize if result is long
-    const processedResult = result.length > this.SUMMARY_THRESHOLD
-      ? await this.summarizeResult(toolName, result)
-      : result;
-
-    const updated = [...messages, { role: 'user', content: `Tool ${toolName}: ${processedResult}` }];
-
-    // Apply window if needed
-    if (updated.length > this.WINDOW_SIZE + 1) {
-      return this.applyWindow(updated);
-    }
-    return updated;
-  }
-
-  private applyWindow(messages: Message[]): Message[] {
-    const systemMsg = messages.find(m => m.role === 'system');
-    const userMsgs = messages.filter(m => m.role !== 'system');
-
-    const window = userMsgs.slice(-this.WINDOW_SIZE);
-    const archived = userMsgs.slice(0, -this.WINDOW_SIZE);
-
-    const summary = this.quickSummary(archived);
-
-    return [
-      systemMsg,
-      { role: 'assistant', content: `[Previous: ${summary}]` },
-      ...window
-    ];
-  }
-
-  private async summarizeResult(toolName: string, result: string): Promise<string> {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'Summarize in 2-3 sentences, keeping key info.' },
-        { role: 'user', content: `Tool: ${toolName}\n${result.slice(0, 2000)}` }
-      ],
-      temperature: 0.1,
-      max_tokens: 150
-    });
-    return response.choices[0].message.content || result.slice(0, 500);
-  }
+interface UserPersonalization {
+  name?: string;      // -> "Name: ..."
+  classe?: string;    // -> "Level: ..."
+  etude?: string;     // -> "Field of study: ..."
+  filiere?: string;   // -> combined with etude
+  presentation?: string; // -> "About: ..."
+  attente?: string;   // -> "Expectations: ..."
+  langue?: string;    // -> "Preferred language: ..."
+  style?: string;     // (available in AgentRequest but not rendered in prompt)
 }
 ```
 
-### Benefits
+Only rendered if at least one field is non-empty. The LLM adapts tone, depth, and language based on this profile.
 
-- Context stable: ~6-8k tokens max
-- Support 20+ iterations (vs 8 before)
-- No loss of critical information
-- Intelligent summarization
+### Provided Sources Section
 
----
+When RAG sources are attached, the prompt includes explicit instructions per source type:
 
-## 7. Query Optimization
+| Source Type | Tool Instruction |
+|---|---|
+| Wikipedia | `getWikipediaArticle` with title |
+| Page | `readWorkspacePage` with pageId |
+| Document | `readRagSource` with sourceId |
 
-### Conditional Reformulation (Intent-Aware)
+Includes a mandatory 3-step workflow: call tool for each source -> read and analyze -> respond based on content.
 
-Only reformulate when necessary, based on detected issues.
+### Research Guidelines Section
 
-```typescript
-export class SmartQueryOptimizer {
-  static async optimizeIfNeeded(query: string): Promise<string> {
-    const issues = this.detectIssues(query);
+Only for `search` and `create-deep` modes. Provides step-by-step research workflow:
 
-    if (issues.length === 0) {
-      return query; // No optimization needed
-    }
+**Search mode**: 9 steps from planning to synthesis, emphasizing indexWikipediaToRAG for precision.
 
-    return await this.applyFixes(query, issues);
-  }
+**Create-deep mode**: 7-step research phase (web -> Wikipedia -> index to RAG -> semantic search -> full content -> workspace -> RAG), with minimum 5-8 tool calls during research.
 
-  private static detectIssues(query: string): string[] {
-    const issues: string[] = [];
+### Content Guidelines Section
 
-    // Spelling errors
-    if (/\b(parle mo|theoremes|pythagore)\b/i.test(query)) {
-      issues.push('spelling');
-    }
+Only for `create-quick` and `create-deep` modes.
 
-    // Too vague (<3 words)
-    if (query.split(' ').length < 3) {
-      issues.push('too_vague');
-    }
+**Create-quick**: Concise focus (500-1500 words), short paragraphs, bullet points, one heading level.
 
-    // Filler words
-    if (/\b(fait|fais|parle moi)\b/i.test(query)) {
-      issues.push('filler_words');
-    }
-
-    return issues;
-  }
-
-  private static async applyFixes(query: string, issues: string[]): Promise<string> {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'Fix query issues. Return ONLY fixed query.' },
-        { role: 'user', content: `Fix ONLY these issues: ${issues.join(', ')}\n\nOriginal: "${query}"\n\nRules:\n- DO NOT change intent\n- DO NOT make academic if simple query` }
-      ],
-      temperature: 0.2,
-      max_tokens: 100
-    });
-    return response.choices[0].message.content?.trim() || query;
-  }
-}
-```
-
-### Examples
-
-| Input | Issues | Output |
-|-------|--------|--------|
-| "create a welcome page" | [] | "create a welcome page" (unchanged) |
-| "parle mo ide theoremes" | [spelling, lacks_context] | "theoremes mathematiques: definitions et proprietes" |
-| "YC" | [too_vague] | "Y Combinator startup accelerator" |
+**Create-deep**: Extensive XML-tagged guidelines covering:
+- `<length_requirements>`: 4000-8000 words mandatory, 32000 tokens available
+- `<structure_requirements>`: table of contents, 4+ heading levels, 8-15 major sections
+- `<content_depth>`: explain every concept, historical context, 2-3 examples per point, statistics, multiple perspectives
+- `<formatting_requirements>`: bold, lists, tables, blockquotes, code blocks, source citations
+- `<quality_constraints>`: publication-ready, complete understanding from single document
 
 ---
 
-## 8. Claude Models Reference
+## 5. Tool Descriptions in Prompts
 
-### Available Models
+The `<available_tools>` section describes all tools available to the agent, organized by category:
 
-| Model | ID | Context | Max Output | Best For |
-|-------|-----|---------|------------|----------|
-| **Claude Sonnet 4.5** | `claude-sonnet-4-5` | 200K | 8K | Deep reasoning, creativity |
-| **Claude 3.5 Haiku** | `claude-3-5-haiku-20241022` | 200K | 8K | Fast quality tasks |
-| **Claude 3 Haiku** | `claude-3-haiku-20240307` | 200K | 4K | Budget-friendly simple tasks |
+### RAG Tools
+- `listAvailableSources` — list RAG sources
+- `searchRagChunks` — search within embedded sources (PDFs, documents)
+- `readRagSource` — read complete content of a RAG source
+- `checkSourcesRagStatus` — check if sources are properly embedded
 
-### Configuration
+### Workspace Tools
+- `listWorkspacePages` — list pages in current workspace
+- `readWorkspacePage` — read page content
+- `listWorkspaceProjects` — list projects
 
-```typescript
-const CLAUDE_HAIKU_CONFIG = {
-  models: {
-    latest: "claude-3-5-haiku-20241022",
-    economical: "claude-3-haiku-20240307",
-  },
-  fallback_chain: [
-    "claude-3-5-haiku-20241022",
-    "claude-3-haiku-20240307",
-    "gpt-4o",
-    "gpt-4o-mini"
-  ]
-};
-```
+### Page Tools
+- `createPage` — create a new page (REQUIRED in create modes, optional in ask/search)
+- `checkPageExists` — verify page existence
 
-### Key Notes
+### Web Tools
+- `searchWeb` — web search for current information
+- `searchWikipedia` — find Wikipedia articles
+- `getWikipediaArticle` — retrieve article introduction
 
-1. **Always use complete model IDs** with date suffixes
-2. **No Claude Haiku 4** exists - only versions 3 and 3.5
-3. **No native JSON mode** - use Tool Use or post-generation validation
-4. **Vision supported** on all Haiku models
+### Wikipedia RAG Tools (pgvector with text-embedding-3-small 1536D)
+- `indexWikipediaToRAG` — chunk and embed Wikipedia article into pgvector
+- `getWikipediaFullContent` — retrieve complete article with all sections
+- `searchWikipediaRAG` — semantic vector search on indexed Wikipedia articles
+- `listWikipediaRAGSources` — list already indexed articles
+
+### Wikipedia Deep Research Workflow (in prompt)
+
+The prompt includes an explicit 4-step workflow for deep Wikipedia research:
+
+1. `searchWikipedia` to find relevant articles
+2. `indexWikipediaToRAG` to store important articles in pgvector
+3. `searchWikipediaRAG` for precise semantic search on indexed content
+4. `getWikipediaFullContent` if complete article text is needed
+
+### Tool Priority (in prompt)
+
+1. Provided sources first
+2. Workspace search if sources insufficient
+3. Encyclopedic knowledge: index to pgvector then searchWikipediaRAG for precision
+4. Quick lookups: searchWikipedia + getWikipediaArticle
+5. Current news: searchWeb
+6. Multiple tools if necessary
 
 ---
 
-## 9. Best Practices
+## 6. Workflows (Advanced)
+
+Source : `pen-backend/src/services/agent/workflows.ts`
+
+For `create-deep` and `search` modes, the system can use advanced workflows with separate `generateText` calls (not the main `streamText` agent loop).
+
+### Parallel Search Workflow
+
+Runs 4 searches concurrently via `Promise.all`:
+1. Web search (`searchWeb`)
+2. Wikipedia search + article retrieval
+3. RAG search (if sources provided)
+4. Workspace pages search
+
+Results sorted by relevance: RAG (1.0) > workspace (0.95) > Wikipedia (0.9) > web (0.8)
+
+### Research Synthesis
+
+Uses `MODELS.thinking` with medium thinking level to combine all search results into a coherent summary.
+
+### Evaluation Loop (Evaluator-Optimizer pattern)
+
+1. Generate initial content
+2. Evaluate quality (score 0-100, threshold 70)
+3. If below threshold, improve based on feedback
+4. Max 3 iterations
+
+Evaluation uses `MODELS.fast`, improvement uses `MODELS.thinking` with high thinking.
+
+### Deep Research Workflow (`search` mode)
+
+6 phases: Parallel Search -> Synthesis -> Planning -> Content Generation -> Evaluation Loop -> Page Creation (optional)
+
+### Deep Content Workflow (`create-deep` mode)
+
+5 phases: Research (via deep research workflow) -> Planning -> Content Generation (with `buildSystemPrompt("create-deep")`) -> Evaluation Loop -> Page Creation (mandatory)
+
+### Quick Content Workflow (`create-quick` mode)
+
+3 phases: Quick RAG search (if sources) -> Content Generation (with low thinking) -> Page Creation (mandatory)
+
+---
+
+## 7. Output Format Rules
+
+Defined in the `<output_format>` section of every system prompt:
+
+1. **Plain text Markdown** — never JSON or structured format like `{ "action": "reply", "content": "..." }`
+2. **LaTeX**: `$formula$` for inline math — never `$$formula$$`
+3. **Language**: respond in user's language (default French), override by `personalization.langue`
+4. **Markdown formatting**: headings, lists, bold, italic, code blocks with language specification
+
+---
+
+## 8. Best Practices
 
 ### Prompt Engineering
 
-**Do**:
-- Use XML tags for structure (Claude)
-- Provide JSON schemas explicitly (GPT)
-- Front-load critical information
-- Include few-shot examples for complex tasks
-- Use professional language without emojis
+- XML tags for structure — each section has semantic meaning
+- English prompts, localized responses
+- Behavior rules as bullet lists
+- Conditional sections — only include what is needed for the mode
+- Tool descriptions include usage examples and priority order
 
-**Don't**:
-- Use overly verbose explanations
-- Mix multiple objectives in one prompt
-- Rely on implicit understanding
-- Use prescriptive language ("MUST", "NEVER")
+### Thinking Levels
 
-### Temperature Guidelines
-
-| Temperature | Use Case |
-|-------------|----------|
-| 0.1-0.3 | JSON generation, argument extraction, factual Q&A |
-| 0.3-0.5 | Explanations, synthesis, analysis |
-| 0.5-0.8 | Content creation, storytelling, brainstorming |
-
-### Tool Arguments by Tool
-
-| Tool | Required Arguments |
-|------|-------------------|
-| `select_relevant_sources` | question (string), availableSources (array) |
-| `read_rag_source` | sourceId (string), query (string) |
-| `search_web` | query (string only, NO maxResults) |
-| `search_rag_chunks` | query (string), optional sourceIds (array) |
-
----
-
-## 10. Implementation Metrics
-
-### Expected Improvements
-
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| **Tokens/cycle** | 5000 | 2000 | -60% |
-| **Parsing success** | 80-85% | 100% | +15-20% |
-| **Context @ 10 iterations** | 28k tokens | 7.5k tokens | -73% |
-| **Max iterations** | 8 | 20+ | +150% |
-| **Latency** | 3.5s | 2.3s | -34% |
-| **Cost per request** | $0.15 | $0.07 | -53% |
-| **Response quality** | 7.2/10 | 9.0/10 | +25% |
-
-### Budget Guards
+Controlled via `providerOptions`, not separate models:
 
 ```typescript
-const BUDGET_CONFIG = {
-  ask: { maxBudget: 0.002, warningAt: 0.0015 },
-  search: { maxBudget: 0.03, warningAt: 0.02 },
-  create: { maxBudget: 0.025, warningAt: 0.02 }
-};
+// Google Gemini
+{ google: { thinkingConfig: { thinkingLevel: "high", includeThoughts: true } } }
+
+// Moonshot Kimi K2.5
+{ moonshotai: { thinking: { type: "enabled", budgetTokens: 8192 } } }
 ```
 
-### Success Criteria
+| Level | Google Mapping | Moonshot Budget | Used By |
+|---|---|---|---|
+| `minimal` | `"minimal"` | disabled | ask |
+| `low` | `"low"` | 4096 tokens | create-quick |
+| `medium` | `"medium"` | 4096 tokens | (research synthesis) |
+| `high` | `"high"` | 8192 tokens | search, create-deep |
 
-| Metric | Target |
-|--------|--------|
-| ASK Latency | < 3s P95 |
-| ASK Cost | < $0.002 |
-| SEARCH Quality Score | > 0.75 avg |
-| SEARCH Cost | < $0.03 |
-| CREATE Quality Score | > 0.80 avg |
-| Provider Uptime | > 99.5% |
+### Temperature
 
----
-
-## References
-
-- Anthropic Documentation: https://docs.anthropic.com/en/docs/about-claude/models
-- OpenAI Structured Outputs: https://platform.openai.com/docs/guides/structured-outputs
-- Anthropic Pricing: https://www.anthropic.com/pricing
+- Not used for the main agent (model handles it internally)
+- Fixed-temp models detected by `isFixedTempModel()` helper
+- Content generation endpoints may set temperature based on model type
 
 ---
 
-*Last updated: January 2026*
+## Voir aussi
+
+- [Model Registry](./model-registry.md) — all 34 models with pricing
+- [AI Providers](../backend/ai-providers.md) — multi-provider architecture
+- [Quiz Intelligence](../features/quiz-intelligence.md) — quiz-specific AI pipeline

@@ -7,7 +7,7 @@
 ## Quick Start
 
 ### Prerequisites
-- Node.js 18+ (20 recommended)
+- Node.js 22+ (LTS)
 - Git 2.30+
 - Docker (optional, for local services)
 - Railway CLI (for deployment)
@@ -16,8 +16,11 @@
 ### Initial Setup
 
 ```bash
-# Clone repository
-git clone <repo-url> && cd Pennote
+# Clone repository with submodules
+git clone --recursive <repo-url> && cd Pennote
+
+# If already cloned without --recursive:
+git submodule update --init --recursive
 
 # Frontend setup
 cd pen-frontend
@@ -31,6 +34,8 @@ npx prisma generate
 npx prisma generate --schema=prisma/schema-embeddings.prisma
 npm run dev:local  # Without Infisical
 ```
+
+> **Note:** Le projet utilise 3 git submodules (`pen-backend`, `pen-frontend`, `pen-website`). Toujours cloner avec `--recursive` ou exécuter `git submodule update --init --recursive` après le clone.
 
 ---
 

@@ -21,6 +21,12 @@ Base URL: `${VITE_API_URL}/api`
 | Upload | `/upload` | Yes | Image upload to Cloudinary |
 | User | `/user` | Yes | User personalization |
 | Auth | `/auth` | Partial | Authentication (Clerk-managed) |
+| Admin | `/admin` | Yes (admin) | Admin dashboard, user management, metrics |
+| Beta | `/beta` | Partial | Beta program management |
+| Dashboard Layout | `/dashboard-layout` | Yes | Dashboard layout persistence |
+| Updates | `/updates` | Yes | Product updates / changelog |
+| Daily Article | `/daily-article` | Yes | Futura Sciences daily article |
+| Sync Limits | `/sync-limits` | Yes | Limits synchronization |
 
 ---
 
@@ -96,8 +102,25 @@ Start a preset sequence (BREVET, BAC, PARTIELS).
 ### GET `/sequence/:sequenceId`
 Get sequence status.
 
-### GET `/statistics/all`
-Get all quiz statistics (optimized endpoint).
+### Quiz Statistics Sub-Routes
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| GET | `/statistics/all` | Yes | Global | All stats (optimized single endpoint) |
+| GET | `/statistics/advanced` | Yes | Global | Advanced analytics |
+| GET | `/statistics/progression` | Yes | Global | Progress over time |
+| GET | `/statistics/subjects` | Yes | Global | Per-subject breakdown |
+| GET | `/statistics/difficulty` | Yes | Global | Per-difficulty breakdown |
+| GET | `/statistics/time` | Yes | Global | Time-based analytics |
+| GET | `/statistics/sources` | Yes | Global | Per-source breakdown |
+| GET | `/statistics/question-types` | Yes | Global | Per-question-type breakdown |
+
+### Quiz Graphics
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| GET | `/graphics` | Yes | Global | Get quiz visualization data |
+| POST | `/graphics` | Yes | Global | Generate quiz visualization |
 
 ---
 
@@ -337,14 +360,17 @@ Upload file with RAG indexing.
 ## Webhooks (`/api/webhooks`)
 
 ### POST `/paddle`
-Paddle billing webhooks (signature verified).
+Paddle billing webhooks (raw body parsing, signature verified).
 
 **Events handled:**
 - `subscription.created`
 - `subscription.activated`
+- `subscription.updated`
 - `subscription.canceled`
+- `subscription.past_due`
 - `subscription.paused`
 - `subscription.resumed`
+- `checkout.completed`
 - `transaction.completed`
 - `transaction.payment_failed`
 
@@ -357,6 +383,115 @@ Get async job result (ownership verified).
 
 ### DELETE `/:jobId`
 Delete job result.
+
+---
+
+## Admin Routes (`/api/admin`)
+
+**Protection:** All admin routes require `authenticateToken` + `requireAdmin` + `adminRateLimit`.
+
+### Dashboard & Metrics
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| GET | `/dashboard` | Admin | adminRateLimit | All dashboard metrics |
+| GET | `/metrics/users` | Admin | adminRateLimit | User acquisition + churn |
+| GET | `/metrics/revenue` | Admin | adminRateLimit | MRR, ARR, LTV |
+| GET | `/metrics/usage` | Admin | adminRateLimit | Feature adoption |
+| GET | `/metrics/trends` | Admin | adminRateLimit | 7d/30d/90d trends |
+| GET | `/metrics/cohorts` | Admin | adminRateLimit | Retention cohorts |
+| GET | `/metrics/ltv` | Admin | adminRateLimit | Lifetime value |
+| GET | `/metrics/ai-costs` | Admin | adminRateLimit | AI spend by provider/model |
+
+### User Management
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| GET | `/users` | Admin | adminRateLimit | Paginated user list |
+| GET | `/users/:userId/pages` | Admin | adminRateLimit | User pages |
+| GET | `/users/:userId/notes` | Admin | adminRateLimit | Admin notes for user |
+| POST | `/users/:userId/notes` | Admin | adminRateLimit | Create admin note |
+| POST | `/users/:userId/toggle-status` | Admin | adminRateLimit | Suspend/restore user |
+| POST | `/users/bulk` | Admin | adminRateLimit | Bulk operations |
+
+### User Export
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| POST | `/users/export` | Admin | adminRateLimit | Initiate CSV export (BullMQ job) |
+| GET | `/users/export/:jobId/status` | Admin | adminRateLimit | Export job progress |
+| GET | `/users/export/:jobId/download` | Admin | adminRateLimit | Download CSV file |
+
+### Beta Management (Admin)
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| GET | `/beta/metrics` | Admin | adminRateLimit | Beta program metrics |
+| GET | `/beta/users` | Admin | adminRateLimit | Beta user list |
+| POST | `/beta/users/:userId/kick` | Admin | adminRateLimit | Remove user from beta |
+| POST | `/beta/users/:userId/promote` | Admin | adminRateLimit | Promote user to beta |
+| POST | `/beta/bulk` | Admin | adminRateLimit | Bulk beta actions |
+
+### Moderation & Health
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| GET | `/moderation/logs` | Admin | adminRateLimit | Audit trail |
+| GET | `/alerts` | Admin | adminRateLimit | System alerts |
+| PATCH | `/alerts/:id/acknowledge` | Admin | adminRateLimit | Mark alert as seen |
+
+### Impersonation
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| POST | `/impersonate/:userId` | Admin | adminRateLimit | Start impersonation |
+| POST | `/impersonate/end` | Admin | adminRateLimit | Stop impersonation |
+
+---
+
+## Beta Routes (`/api/beta`)
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| GET | `/status` | Optional | Global | Public beta status |
+| POST | `/heartbeat` | Yes | Global | Activity tracking |
+| POST | `/waitlist` | No | IP-based | Join waitlist |
+| POST | `/reactivate` | Yes | Global | User reactivation |
+| DELETE | `/account` | Yes | 1/hour | Account deletion |
+| GET | `/account/export` | Yes | 1/day | Data export (GDPR) |
+
+---
+
+## Dashboard Layout Routes (`/api/dashboard-layout`)
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| GET | `/` | Yes | Global | Get saved dashboard layout |
+| POST | `/` | Yes | Global | Save dashboard layout |
+
+---
+
+## Updates Routes (`/api/updates`)
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| GET | `/` | Yes | Global | Product updates / changelog |
+
+---
+
+## Daily Article Routes (`/api/daily-article`)
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| GET | `/` | Yes | Global | Futura Sciences daily article |
+
+---
+
+## Sync Limits Routes (`/api/sync-limits`)
+
+| Method | Endpoint | Auth | Rate Limit | Description |
+|--------|----------|------|------------|-------------|
+| POST | `/` | Yes | Global | Synchronize user limits |
 
 ---
 
@@ -383,6 +518,10 @@ Delete job result.
 | AI | 15min | 150 | userId |
 | Quiz | 15min | 60 | userId |
 | Preprocessor | 15min | 30 | userId |
+| Admin | 15min | adminRateLimit | userId |
+| Beta waitlist | 15min | IP-based | IP |
+| Beta account delete | 1hr | 1 | userId |
+| Beta data export | 1day | 1 | userId |
 
 ---
 
