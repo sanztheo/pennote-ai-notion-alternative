@@ -3,8 +3,18 @@ name: CI Pipeline
 on:
   push:
     branches: [main, sandbox]
+    paths-ignore:
+      - '**/*.md'
+      - 'scripts/**'
+      - 'pen-backend/scripts/**'
+      - 'pen-website/scripts/**'
   pull_request:
     branches: [main, sandbox]
+    paths-ignore:
+      - '**/*.md'
+      - 'scripts/**'
+      - 'pen-backend/scripts/**'
+      - 'pen-website/scripts/**'
   workflow_dispatch:
 
 concurrency:
