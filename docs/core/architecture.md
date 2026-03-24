@@ -521,7 +521,8 @@ const apiClient = new ApiClient(VITE_API_URL);
 │  │  3. Store (after response, fire-and-forget)                         │  │
 │  │     POST /v1/memories/ with user + assistant messages               │  │
 │  │     Truncated to 2000 chars, non-blocking with .catch()             │  │
-│  │     Mem0 automatically extracts declarative facts                   │  │
+│  │     Mem0 async: internal LLM extracts declarative facts             │  │
+│  │     ⚠ "No Memory Changes" = LLM found nothing to memorize (normal) │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 │                                                                            │
 │  Design Principles:                                                        │

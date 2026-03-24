@@ -247,6 +247,12 @@ Key behaviors:
 - **Non-intrusive**: LLM uses memories contextually, doesn't parrot them back
 - **Cross-session**: Memories persist across conversations via Mem0 platform
 
+**How Mem0 stores memories:**
+Mem0 `add()` is **async** — it returns immediately with "pending" status. An internal LLM
+extracts declarative facts from the conversation (e.g., "user studies physics", "prefers examples").
+If the content is too short or technical (code snippets, IDs), the LLM may decide there's nothing
+to memorize → `No Memory Changes`. This is expected behavior, not a bug.
+
 ### Provided Sources Section
 
 When RAG sources are attached, the prompt includes explicit instructions per source type:
