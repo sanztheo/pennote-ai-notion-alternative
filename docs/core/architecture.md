@@ -21,6 +21,10 @@
 │  │  BlockNote  │◄────│  + BullMQ   │────►│  │ Paddle  │ │   Clerk   │  │   │
 │  │  Editor     │ SSE │  + Redis    │     │  │ Billing │ │   Auth    │  │   │
 │  │             │     │             │     │  └─────────┘ └───────────┘  │   │
+│  │             │     │             │     │  ┌─────────┐                │   │
+│  │             │     │             │────►│  │  Mem0   │                │   │
+│  │             │     │             │     │  │ Memory  │                │   │
+│  │             │     │             │     │  └─────────┘                │   │
 │  └─────────────┘     └─────────────┘     └─────────────────────────────┘   │
 │         │                   │                                              │
 │         │                   ▼                                              │
@@ -147,6 +151,7 @@ const apiClient = new ApiClient(VITE_API_URL);
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │  SERVICES (Business Logic)                           │    │
 │  │  ├── agent/       Pennote AI Agent (Vercel AI SDK)  │    │
+│  │  ├── mem0/        Persistent memory (Mem0 API)      │    │
 │  │  ├── quiz/        Intelligence, Preprocessor        │    │
 │  │  ├── rag/         Vector search (pgvector)          │    │
 │  │  ├── credits/     AI credits, Quiz limits           │    │
@@ -251,27 +256,38 @@ const apiClient = new ApiClient(VITE_API_URL);
 │     Body: { messages, mode, conversationId, useWeb, ragSources }          │
 │     Headers: Authorization: Bearer <clerk_token>                           │
 │                                                                             │
-│  3. Agent execution                                                        │
+│  3. Memory retrieval + message conversion (parallel)                       │
+│     Promise.all([convertToModelMessages, searchMemories])                 │
+│     Mem0 search: POST https://api.mem0.ai/v2/memories/search/             │
+│     Returns user's persistent memories (preferences, level, etc.)         │
+│                                                                             │
+│  4. Agent execution                                                        │
 │     routes/agent.ts → PennoteAgent.runAgent()                             │
+│     - System prompt includes <user_memory> section from Mem0              │
 │     - Select system prompt based on mode                                   │
 │     - Enable tools (RAG, Workspace, Web, Page)                            │
 │     - Call streamText() with Gemini/OpenAI                                │
 │                                                                             │
-│  4. Multi-step tool execution                                              │
+│  5. Multi-step tool execution                                              │
 │     Agent may call: searchRagChunks → searchWikipedia → createPage        │
 │     Each step streams partial results                                      │
 │                                                                             │
-│  5. SSE streaming response                                                 │
+│  6. SSE streaming response                                                 │
 │     result.pipeUIMessageStreamToResponse(res)                             │
 │     Format: data: {"type":"text-delta",...}                               │
 │                                                                             │
-│  6. Frontend rendering                                                     │
+│  7. Frontend rendering                                                     │
 │     useChat() parses stream → updates messages state                      │
 │     PennoteChatMessages.tsx renders with Streamdown                       │
 │                                                                             │
-│  7. Persistence (onFinish)                                                 │
+│  8. Persistence (onFinish)                                                 │
 │     conversationService.saveConversation()                                │
 │     Updates AIConversation + AIMessage in Prisma                          │
+│                                                                             │
+│  9. Memory storage (fire-and-forget in onFinish)                           │
+│     addMemories(userId, [{user msg}, {assistant msg}])                    │
+│     Mem0 extracts declarative facts automatically                         │
+│     Non-blocking: .catch() logged, never blocks response                  │
 │                                                                             │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -477,6 +493,56 @@ const apiClient = new ApiClient(VITE_API_URL);
 │  ├── Graphics generation: 1.0                                              │
 │  └── Completions (proxy): 0.25                                             │
 │                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Memory Layer (Mem0)
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                    PERSISTENT MEMORY (MEM0)                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│  Architecture: REST API wrapper (no SDK — avoids @types/pg conflict)      │
+│  Source: pen-backend/src/services/mem0/mem0Client.ts                       │
+│                                                                            │
+│  Flow:                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │  1. Search (before agent run)                                       │  │
+│  │     POST /v2/memories/search/ with user query                       │  │
+│  │     Parallelized with convertToModelMessages via Promise.all        │  │
+│  │     Returns: Mem0Memory[] (preferences, level, interests)           │  │
+│  │                                                                      │  │
+│  │  2. Inject (in system prompt)                                       │  │
+│  │     buildMemorySection() → <user_memory> XML tag                    │  │
+│  │     Sanitized + truncated to 200 chars per entry                    │  │
+│  │     Placed after <user_profile> in prompt                           │  │
+│  │                                                                      │  │
+│  │  3. Store (after response, fire-and-forget)                         │  │
+│  │     POST /v1/memories/ with user + assistant messages               │  │
+│  │     Truncated to 2000 chars, non-blocking with .catch()             │  │
+│  │     Mem0 automatically extracts declarative facts                   │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+│  Design Principles:                                                        │
+│  ├── Graceful degradation: returns [] on failure, never throws            │
+│  ├── Non-blocking: AbortSignal.timeout(5000ms) on all calls              │
+│  ├── Multi-tenant: userId namespaced as pennote:{userId}                  │
+│  ├── Cross-session: memories persist across conversations                 │
+│  └── Privacy: per-user isolation via Mem0 user_id filter                  │
+│                                                                            │
+│  Endpoints Used:                                                           │
+│  ├── Search: POST https://api.mem0.ai/v2/memories/search/                │
+│  ├── Store:  POST https://api.mem0.ai/v1/memories/                        │
+│  └── Auth:   Token header with MEMO env var                               │
+│                                                                            │
+│  Key Files:                                                                │
+│  ├── services/mem0/mem0Client.ts     REST API wrapper                     │
+│  ├── services/agent/systemPrompts.ts  <user_memory> section builder       │
+│  ├── services/agent/PennoteAgent.ts   memoryContext injection             │
+│  ├── services/agent/types.ts          AgentRequest.memoryContext field     │
+│  └── routes/agent.ts                  Search + store orchestration         │
+│                                                                            │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -787,6 +853,7 @@ const apiClient = new ApiClient(VITE_API_URL);
 | Quiz | `services/quizzes.ts` | `controllers/quiz/` |
 | WebSocket | `services/websocketOptimizer.ts` | `index.ts` (ws setup) |
 | Credits | `services/aiCreditsService.ts` | `services/credits/aiCreditsService.ts` |
+| Memory | N/A (backend only) | `services/mem0/mem0Client.ts` |
 
 ### Shared Contracts
 

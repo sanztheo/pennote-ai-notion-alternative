@@ -85,6 +85,7 @@ Pennote (Project)
 | `PADDLE_API_KEY` | Paddle billing | PROD |
 | `PADDLE_WEBHOOK_SECRET` | Paddle webhooks | PROD |
 | `TAVILY_API_KEY` | Tavily search | DEV, PROD |
+| `MEMO` | Mem0 persistent memory API key | DEV, PROD |
 
 ### Secrets Frontend (/Frontend)
 

@@ -253,6 +253,31 @@ export function createTools(ctx: ToolContext) {
 }
 ```
 
+### External API Pattern (Fire-and-Forget)
+
+```typescript
+// ✅ Pattern for non-critical external API calls (e.g., Mem0)
+// 1. Never block the main flow
+// 2. Graceful degradation on failure
+// 3. AbortSignal.timeout for all calls
+
+// Search: parallel with main work, returns [] on failure
+const [modelMessages, memories] = await Promise.all([
+  convertToModelMessages(messages),
+  searchMemories(userId, query), // returns [] on error
+]);
+
+// Store: fire-and-forget in onFinish
+addMemories(userId, msgs)
+  .catch((err) => logger.warn("[MEM0] Uncaught:", err));
+```
+
+Key rules:
+- `AbortSignal.timeout(5000)` on ALL external fetch calls
+- Return empty/null on failure — never throw
+- Namespace user IDs for multi-tenant isolation
+- Truncate content before sending to external APIs
+
 ---
 
 ## Error Handling Patterns

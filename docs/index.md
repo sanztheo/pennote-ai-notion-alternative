@@ -103,6 +103,7 @@ docs/
 | [ai-providers.md](./backend/ai-providers.md) | Multi-provider AI (OpenAI, Gemini, DeepSeek) |
 | [rag-improvements.md](./backend/rag-improvements.md) | Analyse et améliorations système RAG |
 | [error-handling.md](./backend/error-handling.md) | Gestion des erreurs et logging |
+| *Mem0 memory: see [llm-prompts.md](./ai/llm-prompts.md)* | *Persistent cross-session memory (v1.4.0)* |
 
 ### 🎨 Frontend
 
@@ -136,7 +137,7 @@ docs/
 
 | Document | Description |
 |----------|-------------|
-| [llm-prompts.md](./ai/llm-prompts.md) | Multi-provider routing, templates, optimisation |
+| [llm-prompts.md](./ai/llm-prompts.md) | Multi-provider routing, templates, optimisation, Mem0 memory |
 
 ### ⚙️ Features
 

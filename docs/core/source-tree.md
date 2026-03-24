@@ -483,14 +483,19 @@ pen-backend/src/
 │   ├── agent/                       # ★ Pennote AI Agent (Vercel AI SDK)
 │   │   ├── PennoteAgent.ts          # ★ Main agent with streamText()
 │   │   ├── conversationService.ts   # Conversation persistence
-│   │   ├── systemPrompts.ts         # ★ XML system prompts per mode
-│   │   ├── types.ts                 # Agent types
+│   │   ├── intentClassifier.ts      # Intent detection (conversation vs creation)
+│   │   ├── systemPrompts.ts         # ★ XML system prompts per mode + <user_memory>
+│   │   ├── types.ts                 # Agent types (incl. memoryContext)
+│   │   ├── workflows.ts             # Advanced workflows (parallel search, eval loop)
 │   │   └── tools/                   # ★ Agent Tools
 │   │       ├── ragTools.ts          # listAvailableSources, searchRagChunks
 │   │       ├── workspaceTools.ts    # listWorkspacePages, readWorkspacePage
 │   │       ├── webTools.ts          # searchWeb, searchWikipedia
 │   │       ├── wikipediaTools.ts    # indexWikipediaArticle, searchWikipediaRag
 │   │       └── pageTools.ts         # createPage, checkPageExists
+│   │
+│   ├── mem0/                        # 🆕 Persistent Memory (Mem0 API)
+│   │   └── mem0Client.ts            # REST wrapper: searchMemories, addMemories
 │   │
 │   ├── ai/                          # AI Content Services
 │   │   ├── base.ts                  # Base AI service
@@ -560,6 +565,9 @@ pen-backend/src/
 │   │
 │   ├── cron/                        # Scheduled Tasks
 │   │   └── resetLimitsCron.ts       # Monthly limits reset
+│   │
+│   ├── __tests__/                   # Service Tests
+│   │   └── mem0Client.test.ts       # 🆕 Mem0 client tests (9 tests)
 │   │
 │   ├── auth.ts                      # Auth service
 │   ├── userSync.ts                  # User sync service

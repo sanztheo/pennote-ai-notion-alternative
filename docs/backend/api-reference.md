@@ -34,6 +34,9 @@ Base URL: `${VITE_API_URL}/api`
 
 ### POST `/chat`
 Main chat endpoint with SSE streaming.
+Includes Mem0 persistent memory: searches user memories before agent run, stores conversation after response (fire-and-forget).
+
+> **Note:** The `MEM0_API_KEY` env var is optional. The agent works without it (graceful degradation — memory search and store are skipped).
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|

@@ -1,6 +1,6 @@
 # LLM Prompts — Agent Pennote
 
-> Derniere mise a jour : 2026-03-15
+> Derniere mise a jour : 2026-03-24
 >
 > Ce document decrit la construction des system prompts XML, les 4 modes agent,
 > la personnalisation utilisateur, et les outils disponibles.
@@ -31,7 +31,9 @@ lui-meme quels outils appeler et quand repondre.
 ```
 User Message
     ↓
-streamText({ model, system, messages, tools, stopWhen: stepCountIs(maxSteps) })
+Promise.all([convertToModelMessages, searchMemories(Mem0)])
+    ↓
+streamText({ model, system (+ <user_memory>), messages, tools, ... })
     ↓
 ┌─────────────────────────────────────────────┐
 │  Agentic Loop (up to maxSteps)              │
@@ -42,6 +44,8 @@ streamText({ model, system, messages, tools, stopWhen: stepCountIs(maxSteps) })
 └─────────────────────────────────────────────┘
     ↓
 Streamed Response (Markdown + LaTeX)
+    ↓
+onFinish: addMemories(Mem0) — fire-and-forget
 ```
 
 ### Key Design Principles
@@ -52,6 +56,7 @@ Streamed Response (Markdown + LaTeX)
 4. **Personalization injection** — user profile injected into every prompt
 5. **Mode-driven behavior** — same model, different system prompt and limits per mode
 6. **Thinking level, not model swap** — thinking controlled via `providerOptions`, not separate models
+7. **Persistent memory** — Mem0 memories injected as `<user_memory>` section for cross-session personalization
 
 ### Source Files
 
@@ -61,6 +66,7 @@ Streamed Response (Markdown + LaTeX)
 | `pen-backend/src/services/agent/PennoteAgent.ts` | Agent runner (`streamText` call) |
 | `pen-backend/src/services/agent/types.ts` | Mode configs (maxSteps, maxTokens, thinking) |
 | `pen-backend/src/services/agent/workflows.ts` | Advanced workflows (parallel search, eval loop) |
+| `pen-backend/src/services/mem0/mem0Client.ts` | Mem0 REST API client (search + store memories) |
 
 ---
 
@@ -95,6 +101,12 @@ Name: ...
 Level: ...
 Field of study: ...
 </user_profile>
+
+<user_memory>               <!-- only if Mem0 returns memories -->
+You have persistent memory of this user from previous conversations.
+- Memory entry 1 (sanitized, max 200 chars)
+- Memory entry 2
+</user_memory>
 
 <provided_sources>           <!-- only if ragSources provided -->
 The user has explicitly attached N source(s) to this request.
@@ -210,6 +222,30 @@ interface UserPersonalization {
 ```
 
 Only rendered if at least one field is non-empty. The LLM adapts tone, depth, and language based on this profile.
+
+### User Memory Section (Mem0 Persistent Memory)
+
+Added in v1.4.0. Injected after `<user_profile>` when Mem0 returns memories.
+
+Source: `buildMemorySection()` in `systemPrompts.ts`
+
+```xml
+<user_memory>
+You have persistent memory of this user from previous conversations.
+Use these memories to personalize your responses. Do not repeat these memories back
+unless relevant.
+- User studies mathematics at university level
+- User prefers explanations with concrete examples
+- User is interested in quantum physics
+</user_memory>
+```
+
+Key behaviors:
+- **Sanitized**: Each memory entry is cleaned via `sanitizeForPrompt()` (strips XML tags)
+- **Truncated**: Max 200 characters per entry to prevent prompt bloat
+- **Conditional**: Only rendered if Mem0 returns non-empty results
+- **Non-intrusive**: LLM uses memories contextually, doesn't parrot them back
+- **Cross-session**: Memories persist across conversations via Mem0 platform
 
 ### Provided Sources Section
 
