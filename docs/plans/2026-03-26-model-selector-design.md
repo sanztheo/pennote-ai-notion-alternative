@@ -13,45 +13,76 @@ Les utilisateurs ne peuvent pas choisir leur modele AI dans Penly. Le modele est
 | Decision | Choix |
 |----------|-------|
 | Scope | Par conversation, fallback dernier utilise |
-| Modeles exposes | 6 modeles curates (4 standard + 2 premium) |
+| Modeles exposes | 2 modeles de base × niveaux de reflexion |
 | UI | Dropdown dans l'input bar |
-| Pricing | 2 tiers (standard x1, premium x2) |
-| Acces premium | Tout le monde, cout double |
+| Pricing | Flat — 1 credit fast, 3 credits deep, quel que soit le modele/thinking |
 | Default | Dernier modele utilise (localStorage) |
 
 ## Modeles exposes
 
-| Modele | ID | Provider | Tier |
-|--------|----|----------|------|
-| Gemini 3 Flash | `gemini-3-flash-preview` | Google | standard |
-| GPT-5 Mini | `gpt-5-mini` | OpenAI | standard |
-| Claude Sonnet 4.6 | `claude-sonnet-4-6` | Anthropic | standard |
-| DeepSeek Chat | `deepseek-chat` | DeepSeek | standard |
-| GPT-5 | `gpt-5` | OpenAI | premium |
-| Claude Opus 4.6 | `claude-opus-4-6` | Anthropic | premium |
+Chaque modele est expose avec ses niveaux de reflexion (thinking levels).
+L'utilisateur choisit un modele+niveau, pas juste un modele.
+
+### GPT-5.4 Nano (OpenAI)
+
+Model ID: `gpt-5.4-nano`
+Reasoning levels disponibles: `none`, `low`, `medium`, `high`, `xhigh`
+Pricing: $0.20/MTok input, $1.25/MTok output
+
+| Variante | ID composite | Reasoning Level | Tier |
+|----------|-------------|-----------------|------|
+| GPT-5.4 Nano High | `gpt-5.4-nano:high` | `high` | standard |
+| GPT-5.4 Nano XHigh | `gpt-5.4-nano:xhigh` | `xhigh` | standard |
+
+> On expose `high` et `xhigh` — les niveaux les plus utiles pour un modele nano deja cheap.
+
+### Gemini 3 Flash Preview (Google)
+
+| Variante | ID composite | Thinking Level | Tier |
+|----------|-------------|----------------|------|
+| Gemini Flash Minimal | `gemini-3-flash-preview:minimal` | `minimal` | standard |
+| Gemini Flash Low | `gemini-3-flash-preview:low` | `low` | standard |
+| Gemini Flash Medium | `gemini-3-flash-preview:medium` | `medium` | standard |
+| Gemini Flash High | `gemini-3-flash-preview:high` | `high` | standard |
+
+> Note: Google expose 4 niveaux (`minimal`, `low`, `medium`, `high`). Tous exposes.
+
+### Resume
+
+| Variante affichee | Provider | Thinking | Tier | Description |
+|-------------------|----------|----------|------|-------------|
+| Gemini Flash ⚡ | Google | minimal | standard | Ultra rapide, pas de reflexion |
+| Gemini Flash | Google | low | standard | Reflexion legere |
+| Gemini Flash 🧠 | Google | medium | standard | Equilibre vitesse/qualite |
+| Gemini Flash 🧠🧠 | Google | high | standard | Reflexion profonde |
+| GPT-5.4 Nano 🧠 | OpenAI | high | standard | Reasoning OpenAI, budget |
+| GPT-5.4 Nano 🧠🧠 | OpenAI | xhigh | standard | Reasoning max OpenAI |
 
 ## Architecture Backend
 
 ### 1. AGENT_SELECTABLE_MODELS (config/models/)
 
-Nouveau tableau exportant les 6 modeles avec metadata :
+Nouveau tableau exportant les modeles avec metadata. Le concept cle : chaque entree est un **modele + niveau de reflexion**, pas juste un modele.
 
 ```typescript
 interface SelectableModel {
-  id: string;           // Model ID from registry
-  name: string;         // Display name
-  provider: Provider;   // "openai" | "anthropic" | "google" | "deepseek"
-  tier: "standard" | "premium";
-  icon: string;         // Provider icon identifier
+  id: string;              // Composite ID: "modelId:thinkingLevel"
+  modelId: string;         // Real model ID for the API
+  name: string;            // Display name
+  provider: Provider;      // "openai" | "google"
+  icon: string;            // Provider icon identifier
+  thinkingLevel: string;   // Provider-specific thinking level
 }
 
 const AGENT_SELECTABLE_MODELS: SelectableModel[] = [
-  { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", provider: "google", tier: "standard", icon: "google" },
-  { id: "gpt-5-mini", name: "GPT-5 Mini", provider: "openai", tier: "standard", icon: "openai" },
-  { id: "claude-sonnet-4-6", name: "Sonnet 4.6", provider: "anthropic", tier: "standard", icon: "anthropic" },
-  { id: "deepseek-chat", name: "DeepSeek", provider: "deepseek", tier: "standard", icon: "deepseek" },
-  { id: "gpt-5", name: "GPT-5", provider: "openai", tier: "premium", icon: "openai" },
-  { id: "claude-opus-4-6", name: "Opus 4.6", provider: "anthropic", tier: "premium", icon: "anthropic" },
+  // Gemini 3 Flash Preview — 4 thinking levels
+  { id: "gemini-3-flash-preview:minimal", modelId: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview", provider: "google", icon: "google", thinkingLevel: "minimal" },
+  { id: "gemini-3-flash-preview:low", modelId: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview", provider: "google", icon: "google", thinkingLevel: "low" },
+  { id: "gemini-3-flash-preview:medium", modelId: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview", provider: "google", icon: "google", thinkingLevel: "medium" },
+  { id: "gemini-3-flash-preview:high", modelId: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview", provider: "google", icon: "google", thinkingLevel: "high" },
+  // GPT-5.4 Nano — 2 reasoning levels
+  { id: "gpt-5.4-nano:high", modelId: "gpt-5.4-nano", name: "GPT-5.4 Nano", provider: "openai", icon: "openai", thinkingLevel: "high" },
+  { id: "gpt-5.4-nano:xhigh", modelId: "gpt-5.4-nano", name: "GPT-5.4 Nano", provider: "openai", icon: "openai", thinkingLevel: "xhigh" },
 ];
 ```
 
@@ -69,37 +100,40 @@ Retourne les modeles selectionnables dont le provider a une API key configuree.
 
 ### 3. POST /api/agent/chat — modification
 
-Nouveau champ optionnel `modelId` dans le body :
+Nouveau champ optionnel `modelSelection` (composite ID) dans le body :
 
 ```typescript
 interface ChatRequest {
   messages: Message[];
   mode: "fast" | "deep";
-  modelId?: string;        // NEW — optional, validated against AGENT_SELECTABLE_MODELS
+  modelSelection?: string;   // NEW — composite ID ex: "gemini-3-flash-preview:high"
   workspaceId?: string;
   agentId?: string;
   agentType?: string;
 }
 ```
 
-Validation : si `modelId` present et dans `AGENT_SELECTABLE_MODELS` → utiliser. Sinon → fallback `MODELS.AGENT_PRIMARY`.
+Validation backend :
+1. Parser le composite ID → `{ modelId, thinkingLevel }`
+2. Verifier que le composite ID est dans `AGENT_SELECTABLE_MODELS`
+3. Si invalide/absent → fallback `MODELS.AGENT_PRIMARY` + thinking level du mode (fast=medium, deep=high)
+4. Passer `thinkingLevel` a `buildProviderOptions()` au lieu du thinking du mode
 
-### 4. Credit multiplier
+### 4. Credits — Flat pricing
 
-```typescript
-const TIER_MULTIPLIER = { standard: 1, premium: 2 };
+Pas de multiplicateur. Le cout reste celui du mode, independant du modele/thinking :
+- Fast = 1 credit
+- Deep = 3 credits
 
-// Dans le calcul de cout :
-const baseCost = mode === "fast" ? 1 : 3;
-const tier = getModelTier(modelId); // "standard" | "premium"
-const finalCost = baseCost * TIER_MULTIPLIER[tier];
-```
+Les modeles exposes (Gemini Flash + GPT-5.4 Nano) sont tous budget ($0.20-$0.50/MTok input).
+Le delta de cout reel entre thinking levels est negligeable (~$0.01/requete).
+Si on ajoute des modeles chers (Opus, GPT-5) plus tard, on introduira un tier premium a ce moment.
 
 ### 5. Tracabilite
 
 Stockage dans `AIConversation.metadata` :
 ```json
-{ "modelId": "claude-sonnet-4-6" }
+{ "modelSelection": "gemini-3-flash-preview:high", "modelId": "gemini-3-flash-preview", "thinkingLevel": "high" }
 ```
 
 Pas de migration Prisma — le champ `metadata` JSON existe deja.
@@ -111,14 +145,13 @@ Pas de migration Prisma — le champ `metadata` JSON existe deja.
 Emplacement : `components/chat/input/components/ModelSelector.tsx`
 
 **Apparence :**
-- Bouton compact : icone provider + nom court (ex: "◆ Sonnet 4.6")
+- Bouton compact : icone provider + nom court + niveau (ex: "Gemini Flash 🧠")
 - Mobile : icone seule
-- Au clic : dropdown avec les 6 modeles
+- Au clic : dropdown avec les 6 variantes (4 Gemini + 2 Nano)
 
 **Dropdown item :**
 - Icone provider
 - Nom du modele
-- Badge "Premium" + cout double pour les 2 premium
 - Checkmark sur le modele actif
 
 **Donnees :**
@@ -130,18 +163,19 @@ Emplacement : `components/chat/input/components/ModelSelector.tsx`
 - Si le modele en localStorage n'est plus dans la liste → fallback premier standard
 
 **Integration :**
-- `modelId` passe dans `usePennoteChat` → body de `POST /api/agent/chat`
-- `ModeSegmentControl` lit le tier du modele selectionne pour afficher le bon cout
+- `modelSelection` passe dans `usePennoteChat` → body de `POST /api/agent/chat`
 
 ## Data Flow
 
 ```
-User selectionne modele → localStorage("penly-model")
-  → ModeSegmentControl recalcule cout affiche
+User selectionne "gemini-3-flash-preview:high" → localStorage("penly-model")
   → User envoie message
-  → POST /agent/chat { modelId }
-  → Backend validate → getProviderInstance(modelId) → stream
-  → AIConversation.metadata.modelId sauvegarde
+  → POST /agent/chat { modelSelection: "gemini-3-flash-preview:high" }
+  → Backend parse → modelId: "gemini-3-flash-preview", thinkingLevel: "high"
+  → Validate against AGENT_SELECTABLE_MODELS
+  → PennoteAgent.stream() avec modelId + thinkingLevel override
+  → buildProviderOptions() utilise thinkingLevel du user au lieu du mode
+  → AIConversation.metadata = { modelSelection, modelId, thinkingLevel }
 ```
 
 ## Edge Cases
