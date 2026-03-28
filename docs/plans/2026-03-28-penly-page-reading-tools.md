@@ -2,15 +2,22 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Replace the single `readWorkspacePage` tool with 3 pro-grade tools (`getPageOutline`, `readPageSection`, `searchPageContent`) that convert BlockNote JSON to Markdown, support section-based reading, and enforce token safety limits.
+**Goal:** Replace the single `readWorkspacePage` tool with 3 pro-grade tools (`getPageOutline`, `readPageSection`, `searchPageContent`), remove RAG for workspace pages, and add `@page` mentions in the chat input for direct page referencing.
 
-**Architecture:** Hybrid section parsing (headings when available, fallback offset/limit by 50-block chunks). Output is Markdown with `[block:N]` annotations for precise referencing. Soft cap at 32k tokens (forces sectioned reading), hard cap at 100k tokens (rejects).
+**Architecture:** Hybrid section parsing (headings when available, fallback offset/limit by 50-block chunks). Output is Markdown with `[block:N]` annotations for precise referencing. Soft cap at 32k tokens (forces sectioned reading), hard cap at 100k tokens (rejects). `@` mentions use BlockNote's SuggestionMenu with content injection at submit time.
 
-**Tech Stack:** Vercel AI SDK v6 `tool()`, Zod schemas, existing Prisma page model, BlockNote JSON format.
+**Tech Stack:** Vercel AI SDK v6 `tool()`, Zod schemas, Prisma page model, BlockNote JSON, BlockNote SuggestionMenu.
+
+**Design decisions:**
+- Custom BlockNote→Markdown converter (not `blocksToMarkdownLossy`) because the native one loses LaTeX, tables, and custom blocks — critical for Pennote
+- RAG stays for PDFs/uploaded files only, removed for workspace pages
+- `@` mentions replace the current "add source" click flow for pages
 
 ---
 
-## Task 1: Create `blocknoteReader.ts` utility module
+## Phase 1 — Backend: Page Reading Tools
+
+### Task 1: Create `blocknoteReader.ts` utility module
 
 **Files:**
 - Create: `pen-backend/src/services/agent/utils/blocknoteReader.ts`
@@ -358,7 +365,7 @@ git commit -m "feat(agent): add blocknoteReader utils — markdown conversion, s
 
 ---
 
-## Task 2: Create the 3 new page reading tools
+### Task 2: Create the 3 new page reading tools
 
 **Files:**
 - Create: `pen-backend/src/services/agent/tools/pageReadingTools.ts`
@@ -428,6 +435,8 @@ async function fetchPageBlocks(
     blocks,
   };
 }
+
+const FALLBACK_CHUNK_SIZE = 50;
 
 export function createPageReadingTools(ctx: PageReadingToolsContext) {
   return {
@@ -626,8 +635,6 @@ Call getPageOutline first to check page size and available sections.`,
     }),
   };
 }
-
-const FALLBACK_CHUNK_SIZE = 50;
 ```
 
 **Step 2: Run type check**
@@ -645,17 +652,15 @@ git commit -m "feat(agent): add 3 page reading tools — getPageOutline, readPag
 
 ---
 
-## Task 3: Wire new tools into PennoteAgent + remove old `readWorkspacePage`
+### Task 3: Wire new tools into PennoteAgent + remove old `readWorkspacePage`
 
 **Files:**
-- Modify: `pen-backend/src/services/agent/PennoteAgent.ts:3-4` (add import)
-- Modify: `pen-backend/src/services/agent/PennoteAgent.ts:172-198` (add to tool composition)
-- Modify: `pen-backend/src/services/agent/tools/workspaceTools.ts:142-215` (remove readWorkspacePage)
-- Modify: `pen-backend/src/services/agent/tools/workspaceTools.ts:266-346` (remove extractTextFromBlockNote)
+- Modify: `pen-backend/src/services/agent/PennoteAgent.ts` (add import + spread)
+- Modify: `pen-backend/src/services/agent/tools/workspaceTools.ts` (remove readWorkspacePage + extractTextFromBlockNote + dead interfaces)
 
 **Step 1: Add import in PennoteAgent.ts**
 
-After line 7 (`import { createEditTools }`), add:
+After the `createEditTools` import, add:
 
 ```typescript
 import { createPageReadingTools } from "./tools/pageReadingTools.js";
@@ -663,7 +668,7 @@ import { createPageReadingTools } from "./tools/pageReadingTools.js";
 
 **Step 2: Create tools instance in PennoteAgent.ts**
 
-After line 179 (`const editTools = createEditTools(toolContext);`), add:
+After `const editTools = createEditTools(toolContext);`, add:
 
 ```typescript
 const pageReadingTools = createPageReadingTools(toolContext);
@@ -671,13 +676,11 @@ const pageReadingTools = createPageReadingTools(toolContext);
 
 **Step 3: Spread into tools object**
 
-In the `tools` object (line ~185), add `...pageReadingTools`:
-
 ```typescript
 const tools = {
   ...ragTools,
   ...workspaceTools,
-  ...pageReadingTools,    // <-- ADD THIS
+  ...pageReadingTools,    // <-- ADD
   ...(!isGoogleProvider ? webTools : { ... }),
   ...pageTools,
   ...wikipediaTools,
@@ -686,19 +689,21 @@ const tools = {
 } satisfies ToolSet;
 ```
 
-**Step 4: Remove `readWorkspacePage` from workspaceTools.ts**
+**Step 4: Remove from workspaceTools.ts**
 
-Delete the entire `readWorkspacePage` tool definition (lines 142-215) and the `readWorkspacePageSchema` (lines 63-65). Also delete the `extractTextFromBlockNote` function at the bottom (lines 266-346) and its related interfaces (`BlockNoteContentItem`, `BlockNoteTableRow`, `BlockNoteTableContent`, `BlockNoteBlock` — lines 19-54) since the new utility module has its own types.
+Delete:
+- `readWorkspacePageSchema` (lines 63-65)
+- `readWorkspacePage` tool definition (lines 142-215)
+- `extractTextFromBlockNote` function (lines 266-346)
+- Dead interfaces only used by extractTextFromBlockNote: `BlockNoteContentItem`, `BlockNoteTableRow`, `BlockNoteTableContent`, `BlockNoteBlock` (lines 19-54)
 
-Keep only: `listWorkspacePages` and `listWorkspaceProjects`.
+Keep only: `listWorkspacePages` and `listWorkspaceProjects` + their schemas.
 
 **Step 5: Run type check**
 
 ```bash
 cd pen-backend && npx tsc --noEmit
 ```
-
-Fix any import errors (other files importing `readWorkspacePage` or `extractTextFromBlockNote` from workspaceTools).
 
 **Step 6: Commit**
 
@@ -709,12 +714,10 @@ git commit -m "refactor(agent): wire pageReadingTools, remove readWorkspacePage"
 
 ---
 
-## Task 4: Update system prompts
+### Task 4: Update system prompts — replace readWorkspacePage refs + remove page RAG
 
 **Files:**
 - Modify: `pen-backend/src/services/agent/systemPrompts.ts`
-
-All references to `readWorkspacePage` must be updated to use the new tool names.
 
 **Step 1: Update deep research instructions (line ~174)**
 
@@ -730,9 +733,9 @@ OLD: return `- [Page] "${safeTitle}" -> Use readWorkspacePage with pageId="${s.i
 NEW: return `- [Page] "${safeTitle}" -> Use getPageOutline then readPageSection with pageId="${s.id}"`;
 ```
 
-**Step 3: Update editing instructions (lines ~385-407)**
+**Step 3: Update editing flow (lines ~385-407)**
 
-Replace all occurrences of `readWorkspacePage` in the editing flow:
+Replace all `readWorkspacePage` in the editing instructions:
 
 ```
 OLD: STEP 1: Read the page first with readWorkspacePage.
@@ -752,50 +755,54 @@ OLD: Read the page first (readWorkspacePage), then call the edit tool immediatel
 NEW: Read the page first (getPageOutline → readPageSection), then call the edit tool immediately.
 ```
 
-**Step 5: Run type check**
+**Step 5: Remove page type from RAG source instructions**
+
+In the RAG sources section, remove the instruction that tells the agent to use RAG tools for workspace pages. Pages are now read directly via `getPageOutline` + `readPageSection`, not via RAG. Keep RAG instructions only for PDFs and uploaded files.
+
+**Step 6: Run type check**
 
 ```bash
 cd pen-backend && npx tsc --noEmit
 ```
 
-**Step 6: Commit**
+**Step 7: Commit**
 
 ```bash
 git add pen-backend/src/services/agent/systemPrompts.ts
-git commit -m "docs(agent): update system prompts for new page reading tools"
+git commit -m "docs(agent): update system prompts — new page tools, remove page RAG refs"
 ```
 
 ---
 
-## Task 5: Verify — grep for stale references + manual test
+### Task 5: Verify backend — grep stale refs + build
 
 **Files:** None (verification only)
 
-**Step 1: Grep for any remaining `readWorkspacePage` references**
+**Step 1: Grep for stale references**
 
 ```bash
 cd pen-backend && grep -r "readWorkspacePage" src/ --include="*.ts"
 ```
 
-Expected: 0 results. If any found, update them.
+Expected: 0 results.
 
-**Step 2: Grep for old `extractTextFromBlockNote` imports from workspaceTools**
+**Step 2: Grep for old extractTextFromBlockNote imports**
 
 ```bash
 cd pen-backend && grep -r "extractTextFromBlockNote" src/ --include="*.ts"
 ```
 
-If found in files other than `controllers/assistant/helpers/blocknote.ts`, update imports.
+Only match should be in `controllers/assistant/helpers/blocknote.ts` (different function, unrelated).
 
-**Step 3: Build check**
+**Step 3: Full build**
 
 ```bash
 cd pen-backend && npm run build
 ```
 
-Expected: Clean build, no errors.
+Expected: Clean build.
 
-**Step 4: Commit any fixes**
+**Step 4: Commit fixes if any**
 
 ```bash
 git add -A && git commit -m "fix(agent): clean up stale readWorkspacePage references"
@@ -803,47 +810,154 @@ git add -A && git commit -m "fix(agent): clean up stale readWorkspacePage refere
 
 ---
 
-## Task 6: Test the full flow manually
+## Phase 2 — Frontend: `@` Page Mentions
 
-**Not automated — requires running the dev server.**
+### Task 6: Research current chat input architecture
 
-**Step 1: Start backend**
+**Files to read (no changes):**
+- `pen-frontend/src/components/chat/input/` — current chat input components
+- `pen-frontend/src/hooks/usePennoteChat.ts` — how messages are sent to backend
+- Check if BlockNote SuggestionMenu or TipTap Mention is already used somewhere
+
+**Goal:** Understand exactly where to hook the `@` trigger and how mentioned page content reaches the backend.
+
+---
+
+### Task 7: Implement `@page` mention in chat input
+
+**Files:**
+- Create: `pen-frontend/src/components/chat/input/components/PageMentionMenu.tsx`
+- Create: `pen-frontend/src/components/chat/input/hooks/usePageMentions.ts`
+- Modify: chat input component to wire the `@` trigger
+- Modify: `usePennoteChat.ts` or message submit handler to inject mentioned page content
+
+**Architecture (based on Continue.dev / Cursor patterns):**
+
+```
+User types "@" in chat input
+  → Dropdown appears with workspace pages (filtered as user types)
+  → User selects a page
+  → Inline badge appears: [📄 Page Title]
+  → On submit:
+    1. For each mentioned page, fetch content via existing API
+    2. Prepend page content as context to the user message
+    3. Send to backend as normal message
+```
+
+**Step 1: Create `usePageMentions` hook**
+
+Manages the list of mentioned pages, handles add/remove, fetches content on submit.
+
+```typescript
+// pen-frontend/src/components/chat/input/hooks/usePageMentions.ts
+
+interface MentionedPage {
+  id: string;
+  title: string;
+}
+
+interface UsePageMentionsReturn {
+  mentionedPages: MentionedPage[];
+  addMention: (page: MentionedPage) => void;
+  removeMention: (pageId: string) => void;
+  clearMentions: () => void;
+  buildContextPrefix: () => Promise<string>;  // Fetches content, returns markdown prefix
+}
+```
+
+**Step 2: Create `PageMentionMenu` component**
+
+Dropdown that appears when `@` is typed. Fetches pages from `pageService.getWorkspacePages()`, filters by typed query, renders as floating menu.
+
+Key behaviors:
+- Trigger: `@` character in the input
+- Filter: case-insensitive match on page title
+- Select: adds badge inline, closes menu
+- Size guard: estimate page tokens, warn if > model context budget
+- Keyboard: arrow keys navigate, Enter selects, Escape closes
+
+**Step 3: Wire into chat input**
+
+Add the `@` trigger detection to the chat input textarea/editor. On `@` keypress, show `PageMentionMenu`. On selection, insert badge and add to `mentionedPages` list.
+
+**Step 4: Inject content on submit**
+
+In the message submit handler (in `usePennoteChat.ts` or the submit function), before sending:
+
+```typescript
+// Build context from mentioned pages
+const contextPrefix = await buildContextPrefix();
+const finalMessage = contextPrefix
+  ? `${contextPrefix}\n\n---\n\n${userMessage}`
+  : userMessage;
+```
+
+The context prefix format (following Continue.dev pattern):
+
+```markdown
+<mentioned-pages>
+# Page: "Cours de Mathématiques"
+[full markdown content of the page]
+
+# Page: "Notes de Physique"
+[full markdown content of the page]
+</mentioned-pages>
+```
+
+**Step 5: Run type check + dev test**
+
+```bash
+cd pen-frontend && npx tsc --noEmit
+```
+
+**Step 6: Commit**
+
+```bash
+git add pen-frontend/src/components/chat/input/
+git commit -m "feat(chat): add @page mentions — dropdown, badges, content injection"
+```
+
+---
+
+### Task 8: Manual test — full flow
+
+**Step 1: Start dev servers**
 
 ```bash
 cd pen-backend && infisical run --env=dev --path=/Backend -- npm run dev
+cd pen-frontend && npm run dev
 ```
 
-**Step 2: Test with a small page (<32k tokens)**
+**Step 2: Test page reading tools**
 
-In the Penly chat, ask: "Lis ma page [title]"
+In Penly chat: "Lis ma page [title]"
+- Expected: `getPageOutline` → `readPageSection` → markdown response
 
-Expected flow:
-1. Agent calls `listWorkspacePages` to find pageId
-2. Agent calls `getPageOutline` → sees totalTokens < 32k
-3. Agent calls `readPageSection(pageId)` → gets full markdown content
-4. Agent responds with page summary
+**Step 3: Test `@` mentions**
 
-**Step 3: Test with a large page (if available)**
+Type `@` in chat → select a page → send message
+- Expected: page content injected, agent sees it, responds with knowledge of the page
 
-Expected flow:
-1. `getPageOutline` → sees totalTokens > 32k, `exceedsSoftCap: true`
-2. `readPageSection(pageId)` without params → returns error + section list
-3. Agent retries with `readPageSection(pageId, sectionName: "...")` → gets section content
+**Step 4: Test dev logger**
 
-**Step 4: Test searchPageContent**
+After a chat, check `pen-backend/logs/penly-debug/` for the JSON log file.
 
-Ask: "Cherche le mot X dans ma page Y"
+**Step 5: Check the log file contains full tool call data**
 
-Expected: Agent uses `searchPageContent`, gets block matches, then reads around the relevant blocks.
+Read the JSON — should contain all steps, tool calls with args, tool results with full output, reasoning.
 
 ---
 
 ## Summary of all files
 
-| Action | File |
-|--------|------|
-| CREATE | `pen-backend/src/services/agent/utils/blocknoteReader.ts` |
-| CREATE | `pen-backend/src/services/agent/tools/pageReadingTools.ts` |
-| MODIFY | `pen-backend/src/services/agent/PennoteAgent.ts` |
-| MODIFY | `pen-backend/src/services/agent/tools/workspaceTools.ts` |
-| MODIFY | `pen-backend/src/services/agent/systemPrompts.ts` |
+| Action | File | Phase |
+|--------|------|-------|
+| CREATE | `pen-backend/src/services/agent/utils/blocknoteReader.ts` | 1 |
+| CREATE | `pen-backend/src/services/agent/tools/pageReadingTools.ts` | 1 |
+| MODIFY | `pen-backend/src/services/agent/PennoteAgent.ts` | 1 |
+| MODIFY | `pen-backend/src/services/agent/tools/workspaceTools.ts` | 1 |
+| MODIFY | `pen-backend/src/services/agent/systemPrompts.ts` | 1 |
+| CREATE | `pen-frontend/src/components/chat/input/components/PageMentionMenu.tsx` | 2 |
+| CREATE | `pen-frontend/src/components/chat/input/hooks/usePageMentions.ts` | 2 |
+| MODIFY | Chat input component (TBD after Task 6 exploration) | 2 |
+| MODIFY | `pen-frontend/src/hooks/usePennoteChat.ts` or submit handler | 2 |
