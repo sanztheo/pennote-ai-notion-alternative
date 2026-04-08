@@ -102,10 +102,8 @@ npm run dev:local  # Without Infisical
 **Structure:**
 ```
 Infisical
-├── /Backend/DEV       → Local backend development
-├── /Backend/PROD      → Railway production
-├── /Frontend/DEV      → Local frontend development
-└── /Frontend/PROD     → Vercel production
+├── /Backend       → Backend secrets (env selected via --env=dev or --env=prod)
+└── /Frontend      → Frontend secrets (env selected via --env=dev or --env=prod)
 ```
 
 **Local Development with Infisical:**
@@ -117,8 +115,8 @@ brew install infisical/get-cli/infisical
 infisical login
 
 # Run with secrets
-infisical run --env=dev --path=/Frontend/DEV -- npm run dev:local
-infisical run --path=/Backend/DEV -- npm run dev:local
+infisical run --env=dev --path=/Frontend -- npm run dev:local
+infisical run --env=dev --path=/Backend -- npm run dev:local
 ```
 
 ### Required Environment Variables
@@ -246,7 +244,7 @@ prisma generate --schema=prisma/schema-embeddings.prisma
    ```
 
 3. **Environment Variables:**
-   - Copy from Infisical `/Backend/PROD`
+   - Copy from Infisical `/Backend` (env=prod)
    - Set `DATABASE_URL` from Railway PostgreSQL
    - Set `REDIS_URL` from Railway Redis
    - Set `CLIENT_URL` to Vercel frontend URL

@@ -12,8 +12,8 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                      INFISICAL CLOUD                         │
 │  ┌─────────────────┐  ┌─────────────────┐                   │
-│  │  /Backend/DEV   │  │  /Backend/PROD  │                   │
-│  │  /Frontend/DEV  │  │  /Frontend/PROD │                   │
+│  │    /Backend     │  │    /Frontend    │                   │
+│  │  (dev + prod)   │  │  (dev + prod)   │                   │
 │  └────────┬────────┘  └────────┬────────┘                   │
 └───────────┼────────────────────┼────────────────────────────┘
             │                    │
@@ -62,13 +62,11 @@ Cela ouvre un navigateur pour l'authentification. Une fois connecte, le token es
 
 ```
 Pennote (Project)
-├── /Backend/DEV      # Secrets backend developpement
-├── /Backend/PROD     # Secrets backend production
-├── /Frontend/DEV     # Secrets frontend developpement
-└── /Frontend/PROD    # Secrets frontend production
+├── /Backend      # Secrets backend (env selectionne via --env=dev ou --env=prod)
+└── /Frontend     # Secrets frontend (env selectionne via --env=dev ou --env=prod)
 ```
 
-> **IMPORTANT:** Le path inclut l'environnement ! C'est `/Backend/PROD` et non pas `/Backend` avec `--env=prod`.
+> **IMPORTANT:** L'environnement est selectionne via le flag `--env=` (dev, prod), pas dans le path. Le path est `/Backend` ou `/Frontend`.
 
 ### Secrets Backend (/Backend)
 
@@ -104,16 +102,16 @@ Pennote (Project)
 
 ```bash
 # Backend DEV
-infisical secrets --path=/Backend/DEV
+infisical secrets --env=dev --path=/Backend
 
 # Backend PROD
-infisical secrets --path=/Backend/PROD
+infisical secrets --env=prod --path=/Backend
 
 # Frontend DEV
-infisical secrets --path=/Frontend/DEV
+infisical secrets --env=dev --path=/Frontend
 
 # Frontend PROD
-infisical secrets --path=/Frontend/PROD
+infisical secrets --env=prod --path=/Frontend
 ```
 
 ### Lancer avec injection de secrets
@@ -121,18 +119,18 @@ infisical secrets --path=/Frontend/PROD
 ```bash
 # Backend
 cd pen-backend
-infisical run --path=/Backend/DEV -- npm run dev
+infisical run --env=dev --path=/Backend -- npm run dev
 
 # Frontend
 cd pen-frontend
-infisical run --path=/Frontend/DEV -- npm run dev
+infisical run --env=dev --path=/Frontend -- npm run dev
 ```
 
 ### Ajouter/Modifier un secret
 
 ```bash
 # Via CLI
-infisical secrets set MY_SECRET="value" --path=/Backend/DEV
+infisical secrets set MY_SECRET="value" --env=dev --path=/Backend
 
 # Via dashboard (recommande)
 # https://app.infisical.com → Project → Secrets
@@ -141,14 +139,14 @@ infisical secrets set MY_SECRET="value" --path=/Backend/DEV
 ### Supprimer un secret
 
 ```bash
-infisical secrets delete MY_SECRET --path=/Backend/DEV
+infisical secrets delete MY_SECRET --env=dev --path=/Backend
 ```
 
 ### Exporter vers .env (debug uniquement)
 
 ```bash
 # ATTENTION: Ne jamais commit ce fichier!
-infisical export --path=/Backend/DEV --format=dotenv > .env.local
+infisical export --env=dev --path=/Backend --format=dotenv > .env.local
 ```
 
 ---
@@ -170,11 +168,11 @@ infisical login
 
 # Lancer backend
 cd pen-backend
-infisical run --path=/Backend/DEV -- npm run dev
+infisical run --env=dev --path=/Backend -- npm run dev
 
 # Lancer frontend (autre terminal)
 cd pen-frontend
-infisical run --path=/Frontend/DEV -- npm run dev
+infisical run --env=dev --path=/Frontend -- npm run dev
 ```
 
 ### 2. Ajouter un nouveau secret
@@ -248,10 +246,10 @@ infisical login
 
 ### "Secret not found"
 
-Verifier le path (inclut l'environnement):
+Verifier le path et l'environnement:
 ```bash
 # Lister tous les secrets pour debug
-infisical secrets --path=/Backend/DEV
+infisical secrets --env=dev --path=/Backend
 ```
 
 ### "Permission denied"
@@ -262,7 +260,7 @@ Contacter l'admin du projet Infisical pour obtenir les droits.
 
 ```bash
 # Forcer le refresh
-infisical secrets --path=/Backend/DEV --refresh
+infisical secrets --env=dev --path=/Backend --refresh
 ```
 
 ### Variables non injectees
@@ -273,7 +271,7 @@ Verifier que vous utilisez `infisical run`:
 npm run dev
 
 # BON - secrets injectes
-infisical run --path=/Backend/DEV -- npm run dev
+infisical run --env=dev --path=/Backend -- npm run dev
 ```
 
 ---
@@ -314,9 +312,9 @@ Ajouter dans `~/.bashrc` ou `~/.zshrc`:
 
 ```bash
 # Pennote dev shortcuts
-alias pen-backend="cd ~/Desktop/Pennote/pen-backend && infisical run --path=/Backend/DEV -- npm run dev"
-alias pen-frontend="cd ~/Desktop/Pennote/pen-frontend && infisical run --path=/Frontend/DEV -- npm run dev"
-alias pen-secrets="infisical secrets --path=/Backend/DEV"
+alias pen-backend="cd ~/Desktop/Pennote/pen-backend && infisical run --env=dev --path=/Backend -- npm run dev"
+alias pen-frontend="cd ~/Desktop/Pennote/pen-frontend && infisical run --env=dev --path=/Frontend -- npm run dev"
+alias pen-secrets="infisical secrets --env=dev --path=/Backend"
 ```
 
 ### Script de lancement complet
@@ -326,10 +324,10 @@ alias pen-secrets="infisical secrets --path=/Backend/DEV"
 # start-dev.sh
 
 # Terminal 1: Backend
-osascript -e 'tell app "Terminal" to do script "cd ~/Desktop/Pennote/pen-backend && infisical run --path=/Backend/DEV -- npm run dev"'
+osascript -e 'tell app "Terminal" to do script "cd ~/Desktop/Pennote/pen-backend && infisical run --env=dev --path=/Backend -- npm run dev"'
 
 # Terminal 2: Frontend
-osascript -e 'tell app "Terminal" to do script "cd ~/Desktop/Pennote/pen-frontend && infisical run --path=/Frontend/DEV -- npm run dev"'
+osascript -e 'tell app "Terminal" to do script "cd ~/Desktop/Pennote/pen-frontend && infisical run --env=dev --path=/Frontend -- npm run dev"'
 
 echo "Backend: http://localhost:3001"
 echo "Frontend: http://localhost:5173"

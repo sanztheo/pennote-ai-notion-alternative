@@ -19,7 +19,7 @@ npx prisma generate --schema=prisma/schema-embeddings.prisma
 ```bash
 # Verifier Infisical
 infisical login
-infisical run --path=/Backend/DEV -- npm run dev:local
+infisical run --env=dev --path=/Backend -- npm run dev:local
 
 # Ou definir manuellement dans .env
 DATABASE_URL=postgresql://user:pass@host:5432/pennote

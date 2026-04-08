@@ -42,8 +42,8 @@ npm install
 ```bash
 # Option A: Avec Infisical (recommande)
 infisical login
-# Backend: infisical run --path=/Backend/DEV -- npm run dev:local
-# Frontend: infisical run --path=/Frontend/DEV -- npm run dev:local
+# Backend: infisical run --env=dev --path=/Backend -- npm run dev:local
+# Frontend: infisical run --env=dev --path=/Frontend -- npm run dev:local
 
 # Option B: Fichier .env local (demander a l'equipe)
 cp .env.example .env
