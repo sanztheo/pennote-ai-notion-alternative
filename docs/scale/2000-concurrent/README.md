@@ -48,3 +48,20 @@
 
 **Fichiers:** middleware workspace, routes workspace
 **Impact:** -1 DB query par chat request (passe de 3 a 2)
+
+## Quiz streaming sessions → Redis
+
+**Probleme:** Les sessions de streaming quiz sont stockees dans une `Map` en memoire (`sessionManager.ts`). TTL 1h, cleanup toutes les 5 minutes. En single-instance Railway, ca fonctionne. Mais :
+- Multi-process (PM2 cluster) ou multi-instance → session creee sur process A introuvable sur process B → "Session non trouvee" 
+- Rolling deploy → toutes les sessions in-flight perdues → quiz en cours casses
+- Pas de limite memoire — pic de 1000 sessions simultanees = RAM unbounded
+
+**Fix:**
+- Remplacer la `Map` par Redis : `quiz:session:{sessionId}` avec TTL 300s (5 min suffisent, le client se connecte immediatement)
+- `SessionManager.create()` → `redis.set(key, JSON.stringify({userId, request}), "EX", 300)`
+- `SessionManager.get()` → `redis.get(key)` + JSON.parse
+- `SessionManager.delete()` → `redis.del(key)` (anti-replay deja en place)
+- Supprimer le setInterval de cleanup (Redis TTL gere automatiquement)
+
+**Fichiers:** `src/controllers/quiz-streaming/sessionManager.ts`
+**Impact:** Sessions survivent aux deploys, supportent le multi-instance, memoire bornee par Redis TTL
