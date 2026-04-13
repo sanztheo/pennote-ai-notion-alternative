@@ -1,5 +1,5 @@
 # Corbeille (Trash) Implementation Plan
-Session : 91e3ae6e-001c-472a-b5e7-5b4a85626db3
+Session : 3803820d-c644-42a3-b906-76dc554a3d73
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
