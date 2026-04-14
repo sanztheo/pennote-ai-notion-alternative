@@ -27,3 +27,4 @@ three-minds-hub-main/
 # Agent session state and browser automation artifacts — never commit
 .context-guard/
 .playwright-mcp/
+.omx/
