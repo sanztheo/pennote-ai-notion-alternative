@@ -76,3 +76,6 @@ scripts/beta-cleanup.ts
 
 # Misc
 log.csv
+
+# OSS release checklist (local-only, never push)
+OSS_RELEASE_CHECKLIST.md
