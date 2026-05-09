@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security vulnerability
+    url: https://github.com/sanztheo/Pennote/security/advisories/new
+    about: Report security issues privately. Do NOT use public issues.
+  - name: 💬 Discussion / questions
+    url: https://github.com/sanztheo/Pennote/discussions
+    about: Ask questions or discuss ideas in GitHub Discussions.
+  - name: 📧 Direct contact
+    url: mailto:sanztheopro@gmail.com
+    about: Reach the maintainer directly for sensitive matters.

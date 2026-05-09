@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 
-# Environment
+# Environment files
 .env
 .env.*
 !.env.example
@@ -10,7 +10,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# IDE
+# Editors
 .vscode/
 .idea/
 *.swp
@@ -20,11 +20,59 @@ Thumbs.db
 dist/
 build/
 
-# Misc
+# Logs
 *.log
-three-minds-hub-main/
+logs/
+debug-logs/
 
-# Agent session state and browser automation artifacts — never commit
+# Agent / dev tooling
+.claude/
+.cursor/
+.omx/
 .context-guard/
 .playwright-mcp/
-.omx/
+
+# Internal docs/notes (never push to OSS)
+PRE-MORTEM.md
+VERDICT-PIVOT-US.md
+MARKETER-BOSTON-REDIRECT.md
+clarity-memory.md
+session.md
+SKILL-PIPELINE.md
+warp_setup.md
+.agent-rules.md
+AGENTS.md
+GEMINI.md
+marketing/
+tasks/
+archives/
+review-archive/
+
+# Internal data
+*.csv
+!docs/**/*.csv
+outils-etude-ia-prix-france-2026.json
+
+# Internal docs subdirs
+docs/admin/
+docs/csv/
+docs/guides/costs/
+docs/guides/yc-demo-guide.md
+docs/guides/yc-setup.md
+docs/security/audit/
+docs/security/security.md
+docs/superpowers/reviews/
+docs/code-quality/
+docs/logs/
+docs/templates/
+docs/roadmap.md
+docs/roadmap-timeline.html
+docs/features/affiliation/
+docs/changelog/
+docs/archive/
+
+# Local scripts
+scripts/beta-cleanup.ts
+
+# Misc
+log.csv
