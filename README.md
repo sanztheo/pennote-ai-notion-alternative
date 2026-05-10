@@ -15,7 +15,9 @@
 
 Pennote is a study workspace that combines a Notion-style block editor with multi-provider AI assistance, real-time collaboration, and an adaptive quiz engine. This repository is the **monorepo orchestrator** — three git submodules (backend API, web app, marketing site) plus shared docs, CI, and tooling.
 
-If you only want one component, jump straight to its repo: [pen-backend](https://github.com/sanztheo/pen-backend), [pen-frontend](https://github.com/sanztheo/pen-frontend), [pen-website](https://github.com/sanztheo/pen-website).
+If you only want one component, jump straight to its repo: [pen-backend](https://github.com/sanztheo/pen-backend), [pen-frontend](https://github.com/sanztheo/pen-frontend).
+
+> **Note on `pen-website`** — the marketing site source (Next.js landing + blog + legal pages) remains **closed-source**. The OSS scope is the application itself: the backend API and the frontend SPA. The site source contains domain-specific copy, SEO content, and assets that are not relevant to self-hosters; if you want to fork the app, you do not need it.
 
 ## Highlights
 
@@ -27,11 +29,11 @@ If you only want one component, jump straight to its repo: [pen-backend](https:/
 
 ## Components
 
-| Submodule | Stack | Purpose |
-|-----------|-------|---------|
-| [`pen-backend/`](pen-backend/) | Node.js 22, Express, Prisma 6, Vercel AI SDK v6 | API, AI streaming, Yjs collaboration, Paddle billing, RAG with pgvector |
-| [`pen-frontend/`](pen-frontend/) | React 18, Vite 6, BlockNote, React Router 7 | SPA app — Notion-like editor, AI chat, collaborative editing |
-| [`pen-website/`](pen-website/) | Next.js 16 App Router, React 19, Tailwind 4 | Marketing site — landing, blog, legal pages, beta form |
+| Submodule | Stack | Purpose | Source |
+|-----------|-------|---------|--------|
+| [`pen-backend/`](pen-backend/) | Node.js 22, Express, Prisma 6, Vercel AI SDK v6 | API, AI streaming, Yjs collaboration, Paddle billing, RAG with pgvector | OSS (AGPLv3) |
+| [`pen-frontend/`](pen-frontend/) | React 18, Vite 6, BlockNote, React Router 7 | SPA app — Notion-like editor, AI chat, collaborative editing | OSS (AGPLv3) |
+| `pen-website/` | Next.js 16 App Router, React 19, Tailwind 4 | Marketing site (pennote.fr) — landing, blog, legal pages, beta form | Closed-source (private) |
 
 ## Tech stack (top of each repo)
 
@@ -48,20 +50,21 @@ If you only want one component, jump straight to its repo: [pen-backend](https:/
 ## Quick start
 
 ```bash
-# Clone with submodules
-git clone --recurse-submodules https://github.com/sanztheo/Pennote.git
+# Clone the monorepo
+git clone https://github.com/sanztheo/Pennote.git
 cd Pennote
 
-# If you forgot --recurse-submodules
-git submodule update --init --recursive
+# Init only the OSS submodules (skip the private pen-website)
+git submodule update --init pen-backend pen-frontend
 
 # Install per-submodule (each has its own package.json)
 cd pen-backend && npm install && cd ..
 cd pen-frontend && npm install && cd ..
-cd pen-website && npm install && cd ..
 ```
 
-To run all three services locally you need three terminals:
+> **About `--recurse-submodules`** — running `git clone --recurse-submodules` will fail on `pen-website` because it's a private repository. Use the explicit `git submodule update --init pen-backend pen-frontend` form above.
+
+To run both services locally you need two terminals:
 
 ```bash
 # Terminal 1 — backend (port 3001)
@@ -73,11 +76,6 @@ npm run dev
 cd pen-frontend
 cp .env.example .env       # fill in VITE_API_URL, VITE_CLERK_PUBLISHABLE_KEY
 npm run dev
-
-# Terminal 3 — marketing website (port 3000)
-cd pen-website
-cp .env.example .env       # fill in NEXT_PUBLIC_API_URL, NEXT_PUBLIC_APP_URL, ...
-npm run dev
 ```
 
 Each repo's README has the full env-var matrix and platform-specific setup notes.
@@ -86,13 +84,12 @@ Each repo's README has the full env-var matrix and platform-specific setup notes
 
 ```
 Pennote/
-├── pen-backend/          # API submodule (Node + Express + Prisma)
-├── pen-frontend/         # App submodule (React + Vite + BlockNote)
-├── pen-website/          # Marketing submodule (Next.js 16)
+├── pen-backend/          # API submodule (Node + Express + Prisma) — OSS
+├── pen-frontend/         # App submodule (React + Vite + BlockNote) — OSS
+├── pen-website/          # Marketing submodule (Next.js 16) — closed-source
 ├── docs/                 # Architecture, conventions, runbooks
 │   └── index.md          # Documentation entry point
 ├── scripts/              # Repo-wide TypeScript scripts (changelog, sync)
-├── archives/             # Historical snapshots
 └── .github/workflows/    # CI per submodule (Node 22)
 ```
 
@@ -112,8 +109,8 @@ Read the deeper-dive docs in [`docs/core/architecture.md`](docs/core/architectur
 # Update submodules to their tracked commits
 git submodule update --remote --merge
 
-# Run a script across all submodules (example: type-check)
-for d in pen-backend pen-frontend pen-website; do
+# Run a script across the OSS submodules (example: type-check)
+for d in pen-backend pen-frontend; do
   (cd "$d" && npx tsc --noEmit)
 done
 
@@ -128,7 +125,6 @@ Each submodule has its own test runner. From the root:
 ```bash
 cd pen-backend && npm test          # Jest
 cd pen-frontend && npm test         # Vitest
-cd pen-website && npm test          # Vitest
 ```
 
 Backend also ships load tests (`npm run test:load[:light|medium|heavy]`) and a quiz pipeline benchmark (`npm run benchmark:quiz`).
@@ -137,7 +133,7 @@ Backend also ships load tests (`npm run test:load[:light|medium|heavy]`) and a q
 
 - **Backend** → Railway, single replica. See [`docs/guides/deployment-runbook.md`](docs/guides/deployment-runbook.md).
 - **Frontend** → Vercel, configured via [`pen-frontend/vercel.json`](pen-frontend/vercel.json) (asset cache 1y).
-- **Website** → Vercel native Next.js deployment.
+- **Website** → Vercel native Next.js deployment (source closed).
 
 Secrets are managed via [Infisical](docs/guides/infisical.md). The `npm run dev` scripts wrap their commands in `infisical run --env=dev --path=/...`.
 
