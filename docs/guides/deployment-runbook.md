@@ -54,7 +54,7 @@ git push origin main
 vercel --prod
 
 # Verify deployment
-curl -I https://pennote.app
+curl -I https://<your-frontend-host>
 ```
 
 ## 5. Deploy Backend (Railway)
@@ -67,15 +67,15 @@ git push origin main
 railway up
 
 # Verify deployment
-curl https://pennote-backend.up.railway.app/health
+curl https://<your-backend-host>/health
 ```
 
 ## 6. Post-Deployment Validation
 
 ```bash
 # Health checks
-[ ] curl https://pennote-backend.up.railway.app/health  # Returns 200
-[ ] curl https://pennote.app                            # Frontend loads
+[ ] curl https://<your-backend-host>/health             # Returns 200
+[ ] curl https://<your-frontend-host>                   # Frontend loads
 
 # Functional tests
 [ ] Sign in works (Clerk)
@@ -116,7 +116,7 @@ npx prisma migrate resolve --rolled-back migration_name
 ```bash
 # Quick diagnosis
 railway logs | grep -i error
-curl https://pennote-backend.up.railway.app/health
+curl https://<your-backend-host>/health
 
 # Common fixes
 # 1. Env var missing: Check Infisical sync

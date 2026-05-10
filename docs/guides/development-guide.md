@@ -16,11 +16,11 @@
 ### Initial Setup
 
 ```bash
-# Clone repository with submodules
-git clone --recursive <repo-url> && cd Pennote
+# Clone the repository
+git clone <repo-url> && cd Pennote
 
-# If already cloned without --recursive:
-git submodule update --init --recursive
+# Initialize only the public OSS submodules (skip the private pen-website)
+git submodule update --init pen-backend pen-frontend
 
 # Frontend setup
 cd pen-frontend
@@ -35,7 +35,7 @@ npx prisma generate --schema=prisma/schema-embeddings.prisma
 npm run dev:local  # Without Infisical
 ```
 
-> **Note:** Le projet utilise 3 git submodules (`pen-backend`, `pen-frontend`, `pen-website`). Toujours cloner avec `--recursive` ou exécuter `git submodule update --init --recursive` après le clone.
+> **Note:** Le repo declare 3 git submodules. Seuls `pen-backend` et `pen-frontend` sont open-source (AGPLv3) — initialisez-les explicitement avec `git submodule update --init pen-backend pen-frontend`. Le submodule `pen-website` (site marketing) est **prive / closed-source** : ne pas utiliser `--recursive` ni `git submodule update --init --recursive`, l'init echouerait sur le repo prive.
 
 ---
 

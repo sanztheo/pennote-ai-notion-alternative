@@ -645,46 +645,38 @@ docs/
 │   ├── architecture.md              # System design, data flows
 │   ├── conventions.md               # Code standards, patterns
 │   └── source-tree.md               # Ce fichier
-├── admin/                           # 🆕 Dashboard administrateur
-│   ├── index.md                     # Vue d'ensemble admin
-│   ├── architecture.md              # Sécurité, cache, transactions
-│   ├── api-reference.md             # Endpoints API admin
-│   └── roadmap.md                   # Best practices SaaS 2026
 ├── backend/
 │   ├── api-reference.md             # API endpoints documentation
 │   ├── realtime-websocket.md        # WebSocket + Yjs real-time
 │   ├── job-queue-bullmq.md          # BullMQ background jobs
 │   ├── caching-redis.md             # Redis caching patterns
 │   ├── ai-providers.md              # OpenAI, Gemini, DeepSeek
+│   ├── rag-improvements.md          # RAG pipeline improvements
 │   └── error-handling.md            # Error handling patterns
 ├── frontend/
 │   ├── state-management.md          # Contexts, SWR, caching
 │   └── blocknote-extensions.md      # Custom BlockNote extensions
 ├── guides/
 │   ├── development-guide.md         # Setup, commandes
-│   ├── infisical.md                 # 🆕 Gestion secrets Infisical
+│   ├── infisical.md                 # Gestion secrets Infisical
 │   ├── troubleshooting.md           # Common issues & solutions
 │   ├── performance.md               # Performance optimization
 │   ├── deployment-runbook.md        # Deployment procedures
 │   ├── developer-onboarding.md      # New developer guide
-│   ├── yc-setup.md                  # Config YC Demo
-│   └── yc-demo-guide.md             # Guide YC Demo
-├── security/
-│   └── security.md                  # Audit sécurité
+│   └── upgrade-blocknote-ai-sdk.md  # BlockNote AI SDK upgrade
 ├── ai/
-│   └── llm-prompts.md               # Multi-provider, prompts
+│   ├── llm-prompts.md               # Multi-provider, prompts
+│   ├── model-registry.md            # Model registry reference
+│   └── codex-review-prompt.md       # Codex review prompt
 ├── features/
 │   ├── monthly-cycles.md            # Cycles facturation
-│   ├── quiz-intelligence.md         # Quiz intelligence pipeline
-│   └── affiliation/
-│       ├── roadmap.md
-│       ├── context.md
-│       └── doc.md
+│   └── quiz-intelligence.md         # Quiz intelligence pipeline
 ├── migrations/
 │   ├── vercel-ai-sdk-migration.md
 │   ├── clerk-to-paddle-migration.md
 │   └── bullmq-migration.md
-└── archive/                         # Docs obsolètes
+└── scale/                           # Scale-test runbooks (500/2k/10k concurrent)
+    └── README.md
 ```
 
 ---

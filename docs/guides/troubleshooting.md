@@ -242,7 +242,7 @@ cd pen-backend && npx tsc --noEmit
 **Cause:** CLIENT_URL ne contient pas l'origine frontend.
 ```bash
 # Backend - CLIENT_URL peut etre une liste separee par virgules
-CLIENT_URL=http://localhost:5173,https://pennote.app
+CLIENT_URL=http://localhost:5173,https://<your-frontend-host>
 ```
 
 ---

@@ -311,9 +311,10 @@ Pour les API keys sensibles (OpenAI, Paddle):
 Ajouter dans `~/.bashrc` ou `~/.zshrc`:
 
 ```bash
-# Pennote dev shortcuts
-alias pen-backend="cd ~/Desktop/Pennote/pen-backend && infisical run --env=dev --path=/Backend -- npm run dev"
-alias pen-frontend="cd ~/Desktop/Pennote/pen-frontend && infisical run --env=dev --path=/Frontend -- npm run dev"
+# Pennote dev shortcuts (adapter PENNOTE_DIR au chemin local)
+export PENNOTE_DIR="$HOME/path/to/Pennote"
+alias pen-backend="cd \$PENNOTE_DIR/pen-backend && infisical run --env=dev --path=/Backend -- npm run dev"
+alias pen-frontend="cd \$PENNOTE_DIR/pen-frontend && infisical run --env=dev --path=/Frontend -- npm run dev"
 alias pen-secrets="infisical secrets --env=dev --path=/Backend"
 ```
 
@@ -322,12 +323,13 @@ alias pen-secrets="infisical secrets --env=dev --path=/Backend"
 ```bash
 #!/bin/bash
 # start-dev.sh
+PENNOTE_DIR="$HOME/path/to/Pennote"
 
 # Terminal 1: Backend
-osascript -e 'tell app "Terminal" to do script "cd ~/Desktop/Pennote/pen-backend && infisical run --env=dev --path=/Backend -- npm run dev"'
+osascript -e "tell app \"Terminal\" to do script \"cd $PENNOTE_DIR/pen-backend && infisical run --env=dev --path=/Backend -- npm run dev\""
 
 # Terminal 2: Frontend
-osascript -e 'tell app "Terminal" to do script "cd ~/Desktop/Pennote/pen-frontend && infisical run --env=dev --path=/Frontend -- npm run dev"'
+osascript -e "tell app \"Terminal\" to do script \"cd $PENNOTE_DIR/pen-frontend && infisical run --env=dev --path=/Frontend -- npm run dev\""
 
 echo "Backend: http://localhost:3001"
 echo "Frontend: http://localhost:5173"
